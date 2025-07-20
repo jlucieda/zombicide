@@ -14,4 +14,5 @@ def main():
         game_window.cleanup()
 
 if __name__ == "__main__":
+    print("Starting Zombicide Game...")
     main()
