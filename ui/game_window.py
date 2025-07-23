@@ -10,6 +10,12 @@ class GameWindow:
         self.clock = pygame.time.Clock()
         self.running = True
 
+        # Color scheme (greyscale)
+        self.bg_color = (45, 45, 50)          # Dark grey background
+        self.map_border_color = (200, 200, 200)  # Light grey border
+        self.grid_line_color = (120, 120, 120)   # Medium grey grid lines
+        self.map_bg_color = (70, 70, 75)         # Slightly lighter map background
+
         # Map properties
         self.map_size = 800
         self.map_x = 0  # Align to left
@@ -18,20 +24,24 @@ class GameWindow:
         self.cell_size = self.map_size // self.grid_cells
 
     def draw_map(self):
-        # Draw main map border (cyan)
-        pygame.draw.rect(self.screen, (0, 255, 255), 
+        # Fill map background
+        pygame.draw.rect(self.screen, self.map_bg_color,
+                        (self.map_x, self.map_y, self.map_size, self.map_size))
+        
+        # Draw main map border
+        pygame.draw.rect(self.screen, self.map_border_color, 
                         (self.map_x, self.map_y, self.map_size, self.map_size), 
                         3)  # Border thickness of 3 pixels
         
-        # Draw grid lines (white)
+        # Draw grid lines
         for i in range(1, self.grid_cells):
             # Vertical lines
-            pygame.draw.line(self.screen, (255, 255, 255),
+            pygame.draw.line(self.screen, self.grid_line_color,
                            (self.map_x + i * self.cell_size, self.map_y),
                            (self.map_x + i * self.cell_size, self.map_y + self.map_size),
                            1)  # Line thickness of 1 pixel
             # Horizontal lines
-            pygame.draw.line(self.screen, (255, 255, 255),
+            pygame.draw.line(self.screen, self.grid_line_color,
                            (self.map_x, self.map_y + i * self.cell_size),
                            (self.map_x + self.map_size, self.map_y + i * self.cell_size),
                            1)  # Line thickness of 1 pixel
@@ -47,8 +57,8 @@ class GameWindow:
         pass
 
     def draw(self):
-        # Fill the screen with a background color
-        self.screen.fill((0, 0, 0))  # Black background
+        # Fill the screen with background color
+        self.screen.fill(self.bg_color)
         
         # Draw the map
         self.draw_map()
