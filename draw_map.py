@@ -10,7 +10,51 @@ STREET_COLOR = "#eeeeee"   # light gray
 WALL_COLOR = "black"
 WALL_LINEWIDTH = 3
 DOOR_COLOR = "blue"
-DOOR_LINEWIDTH = 5
+DOOR_LINEWIDTH = 2
+
+def draw_door(ax, x, y, direction, opened):
+    """Draw a door on the wall in the given direction at (x, y)."""
+    # Door size as fraction of wall length
+    door_length = 0.3
+    door_thickness = 0.12
+
+    if opened:
+        # Draw a 45º line (like a blueprint)
+        if direction == "up":
+            ax.plot([x + 0.35, x + 0.65], [y + 1, y + 0.7], color=DOOR_COLOR, linewidth=DOOR_LINEWIDTH)
+        elif direction == "down":
+            ax.plot([x + 0.35, x + 0.65], [y, y + 0.3], color=DOOR_COLOR, linewidth=DOOR_LINEWIDTH)
+        elif direction == "left":
+            ax.plot([x, x + 0.3], [y + 0.35, y + 0.65], color=DOOR_COLOR, linewidth=DOOR_LINEWIDTH)
+        elif direction == "right":
+            ax.plot([x + 1, x + 0.7], [y + 0.35, y + 0.65], color=DOOR_COLOR, linewidth=DOOR_LINEWIDTH)
+    else:
+        # Draw a small rectangle (closed door)
+        if direction == "up":
+            rect = patches.Rectangle(
+                (x + 0.5 - door_length / 2, y + 1 - door_thickness / 2),
+                door_length, door_thickness,
+                linewidth=0, edgecolor=None, facecolor=DOOR_COLOR, zorder=10
+            )
+        elif direction == "down":
+            rect = patches.Rectangle(
+                (x + 0.5 - door_length / 2, y - door_thickness / 2),
+                door_length, door_thickness,
+                linewidth=0, edgecolor=None, facecolor=DOOR_COLOR, zorder=10
+            )
+        elif direction == "left":
+            rect = patches.Rectangle(
+                (x - door_thickness / 2, y + 0.5 - door_length / 2),
+                door_thickness, door_length,
+                linewidth=0, edgecolor=None, facecolor=DOOR_COLOR, zorder=10
+            )
+        elif direction == "right":
+            rect = patches.Rectangle(
+                (x + 1 - door_thickness / 2, y + 0.5 - door_length / 2),
+                door_thickness, door_length,
+                linewidth=0, edgecolor=None, facecolor=DOOR_COLOR, zorder=10
+            )
+        ax.add_patch(rect)
 
 def draw_map_from_json(json_path, map_index=0):
     """
@@ -23,14 +67,8 @@ def draw_map_from_json(json_path, map_index=0):
         data = json.load(f)
     map_data = data["maps"][map_index]
     tile = map_data["tiles"][0][0]  # Only one tile for this map
-    
-    # NOTE: Assuming a single tile map for now.
-    # To support multi-tile maps, this would need to iterate through all tiles.
-    tile = map_data["tiles"][0][0]
     zones = tile["zones"]
 
-    TILE_SIZE = 3
-    ZONE_SIZE = 1
     fig, ax = plt.subplots(figsize=(5, 5))
 
     # Draw zones
@@ -41,10 +79,7 @@ def draw_map_from_json(json_path, map_index=0):
             y = TILE_SIZE - 1 - zr  # invert y for display
 
             # Set color based on zone type
-            if "building" in zone["features"]:
-                color = "#d2b48c"  # light brown
-            else:
-                color = "#eeeeee"  # light gray for street
+            color = BUILDING_COLOR if "building" in zone["features"] else STREET_COLOR
 
             rect = patches.Rectangle((x, y), ZONE_SIZE, ZONE_SIZE, linewidth=2, edgecolor='black', facecolor=color)
             ax.add_patch(rect)
@@ -54,22 +89,19 @@ def draw_map_from_json(json_path, map_index=0):
             conns = zone.get("connections", {})
             for direction, conn in conns.items():
                 if conn["type"] == "wall":
+                    # Draw wall
                     if direction == "up":
-                        ax.plot([x, x+1], [y+1, y+1], color='black', linewidth=3)
-                        if conn.get("door"):
-                            ax.plot([x+0.4, x+0.6], [y+1, y+1], color='blue', linewidth=5)
-                    if direction == "down":
-                        ax.plot([x, x+1], [y, y], color='black', linewidth=3)
-                        if conn.get("door"):
-                            ax.plot([x+0.4, x+0.6], [y, y], color='blue', linewidth=5)
-                    if direction == "left":
-                        ax.plot([x, x], [y, y+1], color='black', linewidth=3)
-                        if conn.get("door"):
-                            ax.plot([x, x], [y+0.4, y+0.6], color='blue', linewidth=5)
-                    if direction == "right":
-                        ax.plot([x+1, x+1], [y, y+1], color='black', linewidth=3)
-                        if conn.get("door"):
-                            ax.plot([x+1, x+1], [y+0.4, y+0.6], color='blue', linewidth=5)
+                        ax.plot([x, x+1], [y+1, y+1], color=WALL_COLOR, linewidth=WALL_LINEWIDTH)
+                    elif direction == "down":
+                        ax.plot([x, x+1], [y, y], color=WALL_COLOR, linewidth=WALL_LINEWIDTH)
+                    elif direction == "left":
+                        ax.plot([x, x], [y, y+1], color=WALL_COLOR, linewidth=WALL_LINEWIDTH)
+                    elif direction == "right":
+                        ax.plot([x+1, x+1], [y, y+1], color=WALL_COLOR, linewidth=WALL_LINEWIDTH)
+                    # Draw door if present
+                    if "door" in conn:
+                        opened = conn.get("opened", False)
+                        draw_door(ax, x, y, direction, opened)
 
     ax.set_xlim(0, TILE_SIZE)
     ax.set_ylim(0, TILE_SIZE)
@@ -79,3 +111,4 @@ def draw_map_from_json(json_path, map_index=0):
 
 if __name__ == "__main__":
     print("Drawing Zombicide Map from JSON database...")
+    draw_map_from_json("maps_db.json", map_index=0)
