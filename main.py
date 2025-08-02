@@ -1,13 +1,12 @@
-from ui import GameWindow
-from draw_map import draw_map_from_json
+from ui.game_window import GameWindow
 
 def main():
     # Create game window with specified dimensions
     game_window = GameWindow(width=1200, height=1000, title="Zombicide Game")
     
     try:
-        # Draw the map from the JSON database using the new draw_map module
-        draw_map_from_json("maps_db.json", map_index=0)
+        # Load the map data into the game window
+        game_window.load_map("maps_db.json", map_index=0)
         
         # Run the game loop
         game_window.run()

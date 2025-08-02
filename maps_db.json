@@ -11,7 +11,7 @@
                   "features": ["street"],
                   "connections": {
                     "right": {"type": "open"},
-                    "down": {"type": "open"}
+                    "down": {"type": "wall"}
                   }
                 },
                 {
@@ -35,14 +35,14 @@
                   "features": ["building"],
                   "connections": {
                     "up": {"type": "wall"},
-                    "right": {"type": "wall", "door": true},
+                    "right": {"type": "wall"},
                     "down": {"type": "wall"}
                   }
                 },
                 {
                   "features": ["street"],
                   "connections": {
-                    "left": {"type": "wall", "door": true},
+                    "left": {"type": "wall"},
                     "right": {"type": "open"},
                     "up": {"type": "open"},
                     "down": {"type": "open"}
@@ -61,7 +61,7 @@
                 {
                   "features": ["street"],
                   "connections": {
-                    "up": {"type": "open"},
+                    "up": {"type": "wall"},
                     "right": {"type": "open"}
                   }
                 },
