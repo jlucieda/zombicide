@@ -1,0 +1,90 @@
+{
+  "maps": [
+    {
+      "name": "Map 0",
+      "tiles": [
+        [
+          {
+            "zones": [
+              [
+                {
+                  "features": ["street"],
+                  "connections": {
+                    "right": {"type": "open"},
+                    "down": {"type": "open"}
+                  }
+                },
+                {
+                  "features": ["street"],
+                  "connections": {
+                    "left": {"type": "open"},
+                    "right": {"type": "open"},
+                    "down": {"type": "open"}
+                  }
+                },
+                {
+                  "features": ["street"],
+                  "connections": {
+                    "left": {"type": "open"},
+                    "down": {"type": "open"}
+                  }
+                }
+              ],
+              [
+                {
+                  "features": ["building"],
+                  "connections": {
+                    "up": {"type": "wall"},
+                    "right": {"type": "wall", "door": true},
+                    "down": {"type": "wall"}
+                  }
+                },
+                {
+                  "features": ["street"],
+                  "connections": {
+                    "left": {"type": "wall", "door": true},
+                    "right": {"type": "open"},
+                    "up": {"type": "open"},
+                    "down": {"type": "open"}
+                  }
+                },
+                {
+                  "features": ["street"],
+                  "connections": {
+                    "left": {"type": "open"},
+                    "up": {"type": "open"},
+                    "down": {"type": "open"}
+                  }
+                }
+              ],
+              [
+                {
+                  "features": ["street"],
+                  "connections": {
+                    "up": {"type": "open"},
+                    "right": {"type": "open"}
+                  }
+                },
+                {
+                  "features": ["street"],
+                  "connections": {
+                    "left": {"type": "open"},
+                    "right": {"type": "open"},
+                    "up": {"type": "open"}
+                  }
+                },
+                {
+                  "features": ["street"],
+                  "connections": {
+                    "left": {"type": "open"},
+                    "up": {"type": "open"}
+                  }
+                }
+              ]
+            ]
+          }
+        ]
+      ]
+    }
+  ]
+}
