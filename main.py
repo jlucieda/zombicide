@@ -18,5 +18,5 @@ def main():
         game_window.cleanup()
 
 if __name__ == "__main__":
-    print("Starting Zombicide Game...")
-    main()
+    print("Drawing Zombicide Map from JSON database...")
+    draw_map_from_json("maps_db.json", map_index=0)
