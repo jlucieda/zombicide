@@ -3,7 +3,7 @@ import json
 import sys
 
 class GameWindow:
-    def __init__(self, width=1200, height=1000, title="Zombicide Game"):
+    def __init__(self, width=1200, height=900, title="Zombicide Game"):
         """Initialize game window with pygame"""
         pygame.init()
         
@@ -41,6 +41,7 @@ class GameWindow:
         
         # Map data
         self.map_data = None
+        self.survivors_data = None
 
     def load_map(self, json_path, map_index=0):
         """Load map data from JSON file."""
@@ -52,6 +53,17 @@ class GameWindow:
         except (FileNotFoundError, KeyError, IndexError, json.JSONDecodeError) as e:
             print(f"Error loading map data: {e}")
             self.map_data = None
+    
+    def load_survivors(self, json_path):
+        """Load survivor data from JSON file."""
+        try:
+            with open(json_path, 'r') as f:
+                data = json.load(f)
+            self.survivors_data = data["survivors"]
+            print(f"Loaded {len(self.survivors_data)} survivors")
+        except (FileNotFoundError, KeyError, json.JSONDecodeError) as e:
+            print(f"Error loading survivor data: {e}")
+            self.survivors_data = []
 
     def draw_door(self, x, y, direction, opened=False):
         """Draw a door on the wall."""
@@ -141,12 +153,6 @@ class GameWindow:
                 pygame.draw.rect(self.screen, self.BLACK,
                                (x, y, self.ZONE_PIXEL_SIZE, self.ZONE_PIXEL_SIZE), 2)
                 
-                # Draw zone features text
-                features_text = ','.join(zone["features"])
-                text_surface = self.font_small.render(features_text, True, self.BLACK)
-                text_rect = text_surface.get_rect(center=(x + self.ZONE_PIXEL_SIZE//2, y + self.ZONE_PIXEL_SIZE//2))
-                self.screen.blit(text_surface, text_rect)
-
                 # Draw connections (walls and doors)
                 conns = zone.get("connections", {})
                 for direction, conn in conns.items():
@@ -155,6 +161,95 @@ class GameWindow:
                         if "door" in conn:
                             opened = conn.get("opened", False)
                             self.draw_door(x, y, direction, opened)
+    
+    def draw_survivor_tokens(self):
+        """Draw survivor tokens in zone (0,2) - white circles with black borders and names."""
+        if not self.survivors_data:
+            return
+            
+        # Zone (0,2) coordinates - zone at row 0, column 2
+        zone_row = 0
+        zone_col = 2
+        zone_x = self.MAP_START_X + zone_col * self.ZONE_PIXEL_SIZE
+        zone_y = self.MAP_START_Y + zone_row * self.ZONE_PIXEL_SIZE
+        
+        # Token properties
+        token_diameter = 40
+        token_radius = token_diameter // 2
+        border_width = 2
+        
+        # Position tokens within the zone
+        tokens_per_row = 3
+        spacing = 10
+        start_x = zone_x + spacing
+        start_y = zone_y + spacing
+        
+        for i, survivor in enumerate(self.survivors_data):
+            # Calculate position for each token
+            row = i // tokens_per_row
+            col = i % tokens_per_row
+            
+            token_x = start_x + col * (token_diameter + spacing) + token_radius
+            token_y = start_y + row * (token_diameter + spacing) + token_radius
+            
+            # Make sure token stays within zone bounds
+            if token_x + token_radius > zone_x + self.ZONE_PIXEL_SIZE or \
+               token_y + token_radius > zone_y + self.ZONE_PIXEL_SIZE:
+                continue
+            
+            # Draw white circle with black border
+            pygame.draw.circle(self.screen, self.WHITE, (token_x, token_y), token_radius)
+            pygame.draw.circle(self.screen, self.BLACK, (token_x, token_y), token_radius, border_width)
+            
+            # Draw survivor name in the middle
+            name_surface = self.font_small.render(survivor['name'], True, self.BLACK)
+            name_rect = name_surface.get_rect(center=(token_x, token_y))
+            self.screen.blit(name_surface, name_rect)
+    
+    def draw_zombie_tokens(self):
+        """Draw zombie tokens in zone (2,2) - dark grey circles with 'Z' in the middle."""
+        # Zone (2,2) coordinates - zone at row 2, column 2 (bottom-right)
+        zone_row = 2
+        zone_col = 2
+        zone_x = self.MAP_START_X + zone_col * self.ZONE_PIXEL_SIZE
+        zone_y = self.MAP_START_Y + zone_row * self.ZONE_PIXEL_SIZE
+        
+        # Token properties
+        token_diameter = 40
+        token_radius = token_diameter // 2
+        border_width = 2
+        DARK_GRAY = (64, 64, 64)
+        
+        # Position tokens within the zone
+        tokens_per_row = 2
+        spacing = 20
+        start_x = zone_x + spacing
+        start_y = zone_y + spacing
+        
+        # Draw only 2 zombie tokens
+        num_zombies = 2
+        
+        for i in range(num_zombies):
+            # Calculate position for each token
+            row = i // tokens_per_row
+            col = i % tokens_per_row
+            
+            token_x = start_x + col * (token_diameter + spacing) + token_radius
+            token_y = start_y + row * (token_diameter + spacing) + token_radius
+            
+            # Make sure token stays within zone bounds
+            if token_x + token_radius > zone_x + self.ZONE_PIXEL_SIZE or \
+               token_y + token_radius > zone_y + self.ZONE_PIXEL_SIZE:
+                continue
+            
+            # Draw dark grey circle with black border
+            pygame.draw.circle(self.screen, DARK_GRAY, (token_x, token_y), token_radius)
+            pygame.draw.circle(self.screen, self.BLACK, (token_x, token_y), token_radius, border_width)
+            
+            # Draw 'Z' in the middle
+            z_surface = self.font_medium.render('Z', True, self.WHITE)
+            z_rect = z_surface.get_rect(center=(token_x, token_y))
+            self.screen.blit(z_surface, z_rect)
 
     def handle_events(self):
         """Handle pygame events."""

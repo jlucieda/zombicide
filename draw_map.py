@@ -105,6 +105,109 @@ def draw_survivor_card(screen, survivor, x_pos, y_pos, card_width=280, card_heig
             screen.blit(equipment_surface, (x_pos + 15, y_pos + y_offset))
             y_offset += 18
 
+def draw_survivor_tokens(screen, survivors):
+    """Draw survivor tokens in zone (0,2) - white circles with black borders and names."""
+    if not survivors:
+        return
+        
+    # Zone (0,2) coordinates - zone at row 0, column 2
+    zone_row = 0
+    zone_col = 2
+    zone_x = MAP_START_X + zone_col * ZONE_PIXEL_SIZE
+    zone_y = MAP_START_Y + zone_row * ZONE_PIXEL_SIZE
+    
+    # Colors
+    WHITE = (255, 255, 255)
+    BLACK = (0, 0, 0)
+    
+    # Token properties
+    token_diameter = 40
+    token_radius = token_diameter // 2
+    border_width = 2
+    
+    # Position tokens within the zone
+    tokens_per_row = 3
+    spacing = 10
+    start_x = zone_x + spacing
+    start_y = zone_y + spacing
+    
+    # Font for names
+    font_small = pygame.font.Font(None, 14)
+    
+    for i, survivor in enumerate(survivors):
+        # Calculate position for each token
+        row = i // tokens_per_row
+        col = i % tokens_per_row
+        
+        token_x = start_x + col * (token_diameter + spacing) + token_radius
+        token_y = start_y + row * (token_diameter + spacing) + token_radius
+        
+        # Make sure token stays within zone bounds
+        if token_x + token_radius > zone_x + ZONE_PIXEL_SIZE or \
+           token_y + token_radius > zone_y + ZONE_PIXEL_SIZE:
+            continue
+        
+        # Draw white circle with black border
+        pygame.draw.circle(screen, WHITE, (token_x, token_y), token_radius)
+        pygame.draw.circle(screen, BLACK, (token_x, token_y), token_radius, border_width)
+        
+        # Draw survivor name in the middle
+        name_surface = font_small.render(survivor['name'], True, BLACK)
+        name_rect = name_surface.get_rect(center=(token_x, token_y))
+        screen.blit(name_surface, name_rect)
+
+def draw_zombie_tokens(screen):
+    """Draw zombie tokens in zone (2,2) - dark grey circles with 'Z' in the middle."""
+    # Zone (2,2) coordinates - zone at row 2, column 2 (bottom-right)
+    zone_row = 2
+    zone_col = 2
+    zone_x = MAP_START_X + zone_col * ZONE_PIXEL_SIZE
+    zone_y = MAP_START_Y + zone_row * ZONE_PIXEL_SIZE
+    
+    # Colors
+    WHITE = (255, 255, 255)
+    BLACK = (0, 0, 0)
+    DARK_GRAY = (64, 64, 64)
+    
+    # Token properties
+    token_diameter = 40
+    token_radius = token_diameter // 2
+    border_width = 2
+    
+    # Position tokens within the zone
+    tokens_per_row = 2
+    spacing = 20
+    start_x = zone_x + spacing
+    start_y = zone_y + spacing
+    
+    # Font for 'Z'
+    font_medium = pygame.font.Font(None, 18)
+    
+    # Draw only 2 zombie tokens
+    num_zombies = 2
+    
+    for i in range(num_zombies):
+        # Calculate position for each token
+        row = i // tokens_per_row
+        col = i % tokens_per_row
+        
+        token_x = start_x + col * (token_diameter + spacing) + token_radius
+        token_y = start_y + row * (token_diameter + spacing) + token_radius
+        
+        # Make sure token stays within zone bounds
+        if token_x + token_radius > zone_x + ZONE_PIXEL_SIZE or \
+           token_y + token_radius > zone_y + ZONE_PIXEL_SIZE:
+            continue
+        
+        # Draw dark grey circle with black border
+        pygame.draw.circle(screen, DARK_GRAY, (token_x, token_y), token_radius)
+        pygame.draw.circle(screen, BLACK, (token_x, token_y), token_radius, border_width)
+        
+        # Draw 'Z' in the middle
+        z_surface = font_medium.render('Z', True, WHITE)
+        z_rect = z_surface.get_rect(center=(token_x, token_y))
+        screen.blit(z_surface, z_rect)
+
 def draw_map_from_json(json_path, map_index=0):
     """
     Reads map data from a JSON file and visualizes it using pygame.
@@ -205,6 +308,12 @@ def draw_map_from_json(json_path, map_index=0):
         for i, survivor in enumerate(survivors):  # Show all survivors
             card_y = MAP_START_Y + (i * 400)  # Stack cards vertically, one below the other
             draw_survivor_card(screen, survivor, card_start_x, card_y)
+        
+        # Draw survivor tokens in zone (0,2)
+        draw_survivor_tokens(screen, survivors)
+        
+        # Draw zombie tokens in zone (2,2)
+        draw_zombie_tokens(screen)
         
         # Update display
         pygame.display.flip()
