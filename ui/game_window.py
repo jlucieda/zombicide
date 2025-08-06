@@ -1,6 +1,9 @@
 import pygame
 import json
 import sys
+from core.turn_manager import TurnManager, TurnPhase
+from core.entities import GameState, Survivor, Zombie
+from core.actions import Position
 
 class GameWindow:
     def __init__(self, width=1200, height=900, title="Zombicide Game"):
@@ -39,9 +42,15 @@ class GameWindow:
         self.font_medium = pygame.font.Font(None, 18)
         self.font_small = pygame.font.Font(None, 14)
         
-        # Map data
+        # Game data
         self.map_data = None
         self.survivors_data = None
+        self.game_state = GameState()
+        
+        # Turn management
+        self.turn_manager = TurnManager()
+        self.turn_manager.on_phase_change = self.on_phase_change
+        self.turn_manager.on_turn_change = self.on_turn_change
 
     def load_map(self, json_path, map_index=0):
         """Load map data from JSON file."""
@@ -61,6 +70,24 @@ class GameWindow:
                 data = json.load(f)
             self.survivors_data = data["survivors"]
             print(f"Loaded {len(self.survivors_data)} survivors")
+            
+            # Initialize survivors in game state
+            self.game_state.survivors.clear()
+            for i, survivor_data in enumerate(self.survivors_data):
+                survivor_id = f"survivor_{i}"
+                # Start survivors in zone (0,2) - top right
+                position = Position(0, 2)
+                survivor = Survivor(survivor_id, survivor_data['name'], position, survivor_data)
+                self.game_state.add_survivor(survivor)
+            
+            # Initialize zombies in game state (2 zombies in zone (2,2) - bottom right)
+            self.game_state.zombies.clear()
+            for i in range(2):
+                zombie_id = f"zombie_{i}"
+                position = Position(2, 2)  # Bottom right zone
+                zombie = Zombie(zombie_id, position)
+                self.game_state.add_zombie(zombie)
+            
         except (FileNotFoundError, KeyError, json.JSONDecodeError) as e:
             print(f"Error loading survivor data: {e}")
             self.survivors_data = []
@@ -163,93 +190,163 @@ class GameWindow:
                             self.draw_door(x, y, direction, opened)
     
     def draw_survivor_tokens(self):
-        """Draw survivor tokens in zone (0,2) - white circles with black borders and names."""
-        if not self.survivors_data:
+        """Draw survivor tokens at their current positions - white circles with black borders and names."""
+        if not self.game_state.survivors:
             return
             
-        # Zone (0,2) coordinates - zone at row 0, column 2
-        zone_row = 0
-        zone_col = 2
-        zone_x = self.MAP_START_X + zone_col * self.ZONE_PIXEL_SIZE
-        zone_y = self.MAP_START_Y + zone_row * self.ZONE_PIXEL_SIZE
-        
         # Token properties
         token_diameter = 40
         token_radius = token_diameter // 2
         border_width = 2
+        CYAN = (0, 255, 255)
         
-        # Position tokens within the zone
-        tokens_per_row = 3
-        spacing = 10
-        start_x = zone_x + spacing
-        start_y = zone_y + spacing
+        # Get current active survivor from turn manager
+        current_survivor = self.turn_manager.get_current_survivor()
         
-        for i, survivor in enumerate(self.survivors_data):
-            # Calculate position for each token
-            row = i // tokens_per_row
-            col = i % tokens_per_row
+        # Group survivors by position
+        survivors_by_position = {}
+        for survivor in self.game_state.survivors:
+            if survivor.alive:
+                pos_key = (survivor.position.row, survivor.position.col)
+                if pos_key not in survivors_by_position:
+                    survivors_by_position[pos_key] = []
+                survivors_by_position[pos_key].append(survivor)
+        
+        # Draw survivors at each position
+        for (row, col), survivors in survivors_by_position.items():
+            zone_x = self.MAP_START_X + col * self.ZONE_PIXEL_SIZE
+            zone_y = self.MAP_START_Y + row * self.ZONE_PIXEL_SIZE
             
-            token_x = start_x + col * (token_diameter + spacing) + token_radius
-            token_y = start_y + row * (token_diameter + spacing) + token_radius
+            # Position tokens within the zone
+            tokens_per_row = min(3, len(survivors))
+            spacing = 10
+            start_x = zone_x + spacing
+            start_y = zone_y + spacing
             
-            # Make sure token stays within zone bounds
-            if token_x + token_radius > zone_x + self.ZONE_PIXEL_SIZE or \
-               token_y + token_radius > zone_y + self.ZONE_PIXEL_SIZE:
-                continue
-            
-            # Draw white circle with black border
-            pygame.draw.circle(self.screen, self.WHITE, (token_x, token_y), token_radius)
-            pygame.draw.circle(self.screen, self.BLACK, (token_x, token_y), token_radius, border_width)
-            
-            # Draw survivor name in the middle
-            name_surface = self.font_small.render(survivor['name'], True, self.BLACK)
-            name_rect = name_surface.get_rect(center=(token_x, token_y))
-            self.screen.blit(name_surface, name_rect)
+            for i, survivor in enumerate(survivors):
+                # Calculate position for each token
+                token_row = i // tokens_per_row
+                token_col = i % tokens_per_row
+                
+                token_x = start_x + token_col * (token_diameter + spacing) + token_radius
+                token_y = start_y + token_row * (token_diameter + spacing) + token_radius
+                
+                # Make sure token stays within zone bounds
+                if token_x + token_radius > zone_x + self.ZONE_PIXEL_SIZE or \
+                   token_y + token_radius > zone_y + self.ZONE_PIXEL_SIZE:
+                    continue
+                
+                # Color based on survivor status - cyan if active, white otherwise
+                if current_survivor and survivor.id == current_survivor.id:
+                    color = CYAN  # Active survivor gets cyan color
+                else:
+                    color = self.WHITE if survivor.alive else self.GRAY
+                
+                # Draw circle with black border
+                pygame.draw.circle(self.screen, color, (token_x, token_y), token_radius)
+                pygame.draw.circle(self.screen, self.BLACK, (token_x, token_y), token_radius, border_width)
+                
+                # Draw survivor name in the middle
+                name_surface = self.font_small.render(survivor.name, True, self.BLACK)
+                name_rect = name_surface.get_rect(center=(token_x, token_y))
+                self.screen.blit(name_surface, name_rect)
     
     def draw_zombie_tokens(self):
-        """Draw zombie tokens in zone (2,2) - dark grey circles with 'Z' in the middle."""
-        # Zone (2,2) coordinates - zone at row 2, column 2 (bottom-right)
-        zone_row = 2
-        zone_col = 2
-        zone_x = self.MAP_START_X + zone_col * self.ZONE_PIXEL_SIZE
-        zone_y = self.MAP_START_Y + zone_row * self.ZONE_PIXEL_SIZE
-        
+        """Draw zombie tokens at their current positions - dark grey circles with 'Z' in the middle."""
+        if not self.game_state.zombies:
+            return
+            
         # Token properties
         token_diameter = 40
         token_radius = token_diameter // 2
         border_width = 2
         DARK_GRAY = (64, 64, 64)
         
-        # Position tokens within the zone
-        tokens_per_row = 2
-        spacing = 20
-        start_x = zone_x + spacing
-        start_y = zone_y + spacing
+        # Group zombies by position
+        zombies_by_position = {}
+        for zombie in self.game_state.zombies:
+            if zombie.alive:
+                pos_key = (zombie.position.row, zombie.position.col)
+                if pos_key not in zombies_by_position:
+                    zombies_by_position[pos_key] = []
+                zombies_by_position[pos_key].append(zombie)
         
-        # Draw only 2 zombie tokens
-        num_zombies = 2
+        # Draw zombies at each position
+        for (row, col), zombies in zombies_by_position.items():
+            zone_x = self.MAP_START_X + col * self.ZONE_PIXEL_SIZE
+            zone_y = self.MAP_START_Y + row * self.ZONE_PIXEL_SIZE
+            
+            # Position tokens within the zone
+            tokens_per_row = min(3, len(zombies))
+            spacing = 20
+            start_x = zone_x + spacing
+            start_y = zone_y + spacing
+            
+            for i, zombie in enumerate(zombies):
+                # Calculate position for each token
+                token_row = i // tokens_per_row
+                token_col = i % tokens_per_row
+                
+                token_x = start_x + token_col * (token_diameter + spacing) + token_radius
+                token_y = start_y + token_row * (token_diameter + spacing) + token_radius
+                
+                # Make sure token stays within zone bounds
+                if token_x + token_radius > zone_x + self.ZONE_PIXEL_SIZE or \
+                   token_y + token_radius > zone_y + self.ZONE_PIXEL_SIZE:
+                    continue
+                
+                # Draw dark grey circle with black border
+                pygame.draw.circle(self.screen, DARK_GRAY, (token_x, token_y), token_radius)
+                pygame.draw.circle(self.screen, self.BLACK, (token_x, token_y), token_radius, border_width)
+                
+                # Draw 'Z' in the middle
+                z_surface = self.font_medium.render('Z', True, self.WHITE)
+                z_rect = z_surface.get_rect(center=(token_x, token_y))
+                self.screen.blit(z_surface, z_rect)
+    
+    def draw_turn_info(self):
+        """Draw turn information on the screen."""
+        turn_info = self.turn_manager.get_turn_info()
         
-        for i in range(num_zombies):
-            # Calculate position for each token
-            row = i // tokens_per_row
-            col = i % tokens_per_row
-            
-            token_x = start_x + col * (token_diameter + spacing) + token_radius
-            token_y = start_y + row * (token_diameter + spacing) + token_radius
-            
-            # Make sure token stays within zone bounds
-            if token_x + token_radius > zone_x + self.ZONE_PIXEL_SIZE or \
-               token_y + token_radius > zone_y + self.ZONE_PIXEL_SIZE:
-                continue
-            
-            # Draw dark grey circle with black border
-            pygame.draw.circle(self.screen, DARK_GRAY, (token_x, token_y), token_radius)
-            pygame.draw.circle(self.screen, self.BLACK, (token_x, token_y), token_radius, border_width)
-            
-            # Draw 'Z' in the middle
-            z_surface = self.font_medium.render('Z', True, self.WHITE)
-            z_rect = z_surface.get_rect(center=(token_x, token_y))
-            self.screen.blit(z_surface, z_rect)
+        # Position in top-left corner
+        info_x = 10
+        info_y = 10
+        line_height = 25
+        
+        # Background rectangle for better readability
+        info_rect = pygame.Rect(info_x - 5, info_y - 5, 300, 120)
+        pygame.draw.rect(self.screen, (0, 0, 0, 180), info_rect)
+        pygame.draw.rect(self.screen, self.WHITE, info_rect, 2)
+        
+        # Turn number
+        turn_text = f"Turn: {turn_info['turn_number']}"
+        turn_surface = self.font_large.render(turn_text, True, self.WHITE)
+        self.screen.blit(turn_surface, (info_x, info_y))
+        
+        # Current phase
+        phase_text = f"Phase: {turn_info['phase_name']}"
+        phase_surface = self.font_medium.render(phase_text, True, self.WHITE)
+        self.screen.blit(phase_surface, (info_x, info_y + line_height))
+        
+        # Phase status
+        status = "Complete" if turn_info['phase_complete'] else "In Progress"
+        status_color = self.WHITE if turn_info['phase_complete'] else (255, 255, 0)  # Yellow for in progress
+        status_text = f"Status: {status}"
+        status_surface = self.font_small.render(status_text, True, status_color)
+        self.screen.blit(status_surface, (info_x, info_y + line_height * 2))
+        
+        # Controls info
+        controls_text = "SPACE: Next Phase | P: Pause | ESC: Quit"
+        controls_surface = self.font_small.render(controls_text, True, (200, 200, 200))
+        self.screen.blit(controls_surface, (info_x, info_y + line_height * 3))
+
+    def on_phase_change(self, new_phase):
+        """Callback when turn phase changes."""
+        print(f"Phase changed to: {self.turn_manager.get_phase_name()}")
+    
+    def on_turn_change(self, new_turn):
+        """Callback when turn number changes."""
+        print(f"Starting turn {new_turn}")
 
     def handle_events(self):
         """Handle pygame events."""
@@ -259,21 +356,185 @@ class GameWindow:
             elif event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE:
                     self.running = False
+                else:
+                    # Let turn manager handle other key events
+                    self.turn_manager.handle_event(event)
 
-    def update(self):
+    def update(self, dt):
         """Update game state."""
-        pass
+        # Update turn manager
+        self.turn_manager.update(dt)
+        
+        # Process current turn phase
+        current_phase = self.turn_manager.get_current_phase()
+        
+        if current_phase == TurnPhase.SURVIVOR_TURN:
+            self.turn_manager.process_survivor_turn(self.game_state)
+        elif current_phase == TurnPhase.ZOMBIE_TURN:
+            self.turn_manager.process_zombie_turn(self.game_state)
+        elif current_phase == TurnPhase.ZOMBIE_SPAWN:
+            self.turn_manager.process_zombie_spawn()
+        elif current_phase == TurnPhase.TURN_END:
+            self.turn_manager.process_turn_end()
 
+    def draw_survivor_cards(self):
+        """Draw survivor cards with highlighting and actions display."""
+        if not self.survivors_data:
+            return
+            
+        # Colors
+        WHITE = (255, 255, 255)
+        BLACK = (0, 0, 0)
+        GRAY = (200, 200, 200)
+        BLUE = (0, 0, 255)
+        YELLOW = (255, 255, 0)
+        ORANGE = (255, 165, 0)
+        RED = (255, 0, 0)
+        CYAN = (0, 255, 255)
+        
+        level_colors = {
+            'blue': BLUE,
+            'yellow': YELLOW, 
+            'orange': ORANGE,
+            'red': RED
+        }
+        
+        # Get current active survivor
+        current_survivor = self.turn_manager.get_current_survivor()
+        
+        # Position cards to the right of the map
+        card_width = 280
+        card_height = 380
+        card_start_x = 550
+        spacing = 20
+        
+        for i, survivor_data in enumerate(self.survivors_data):
+            # Find corresponding survivor entity for actions
+            survivor_entity = None
+            for survivor in self.game_state.survivors:
+                if survivor.name == survivor_data['name']:
+                    survivor_entity = survivor
+                    break
+            
+            card_x = card_start_x
+            card_y = 50 + (i * (card_height + spacing))
+            
+            # Determine if this survivor is active
+            is_active = (current_survivor and survivor_entity and 
+                        current_survivor.id == survivor_entity.id)
+            
+            # Draw card background with highlighting
+            border_color = CYAN if is_active else WHITE
+            border_width = 5 if is_active else 3
+            
+            pygame.draw.rect(self.screen, border_color, (card_x, card_y, card_width, card_height), border_width)
+            pygame.draw.rect(self.screen, GRAY, (card_x+border_width, card_y+border_width, 
+                           card_width-2*border_width, card_height-2*border_width))
+            
+            # Draw survivor name with highlighting
+            name_color = CYAN if is_active else BLACK
+            name_surface = self.font_large.render(survivor_data['name'], True, name_color)
+            name_rect = name_surface.get_rect(centerx=card_x + card_width//2, y=card_y + 10)
+            self.screen.blit(name_surface, name_rect)
+            
+            # Draw actions remaining if survivor entity exists
+            if survivor_entity:
+                actions_text = f"Actions: {survivor_entity.actions_remaining}/3"
+                actions_color = CYAN if is_active else BLACK
+                actions_surface = self.font_medium.render(actions_text, True, actions_color)
+                self.screen.blit(actions_surface, (card_x + 10, card_y + 35))
+            
+            # Draw level color indicator
+            level_color = level_colors.get(survivor_data['level'], GRAY)
+            level_rect = pygame.Rect(card_x + 20, card_y + 60, card_width - 40, 25)
+            pygame.draw.rect(self.screen, level_color, level_rect)
+            pygame.draw.rect(self.screen, BLACK, level_rect, 1)
+            
+            level_surface = self.font_medium.render(survivor_data['level'].upper(), True, WHITE)
+            level_text_rect = level_surface.get_rect(center=level_rect.center)
+            self.screen.blit(level_surface, level_text_rect)
+            
+            # Draw wounds and experience
+            wounds_surface = self.font_medium.render(f"Wounds: {survivor_data['wounds']}", True, BLACK)
+            self.screen.blit(wounds_surface, (card_x + 10, card_y + 95))
+            
+            exp_surface = self.font_medium.render(f"XP: {survivor_data['exp']}", True, BLACK)
+            self.screen.blit(exp_surface, (card_x + 10, card_y + 115))
+    
+    def draw_action_menu(self):
+        """Draw the action selection menu when waiting for user input."""
+        if not self.turn_manager.is_waiting_for_action():
+            return
+            
+        # Get available actions
+        available_actions = self.turn_manager.get_available_actions()
+        if not available_actions:
+            return
+        
+        # Menu properties
+        menu_width = 300
+        menu_height = 200
+        menu_x = (self.width - menu_width) // 2
+        menu_y = (self.height - menu_height) // 2
+        
+        # Draw menu background
+        menu_rect = pygame.Rect(menu_x, menu_y, menu_width, menu_height)
+        pygame.draw.rect(self.screen, (50, 50, 50), menu_rect)
+        pygame.draw.rect(self.screen, self.WHITE, menu_rect, 3)
+        
+        # Draw title
+        current_survivor = self.turn_manager.get_current_survivor()
+        if current_survivor:
+            title_text = f"{current_survivor.name}'s Turn"
+            title_surface = self.font_large.render(title_text, True, self.WHITE)
+            title_rect = title_surface.get_rect(centerx=menu_x + menu_width//2, y=menu_y + 10)
+            self.screen.blit(title_surface, title_rect)
+        
+        # Draw available actions
+        actions_start_y = menu_y + 50
+        line_height = 25
+        
+        for i, action in enumerate(available_actions):
+            action_text = f"{i+1}. {action}"
+            action_surface = self.font_medium.render(action_text, True, self.WHITE)
+            self.screen.blit(action_surface, (menu_x + 20, actions_start_y + i * line_height))
+        
+        # Draw instructions
+        instruction_text = "Press 1, 2, or 3 to select action"
+        instruction_surface = self.font_small.render(instruction_text, True, (200, 200, 200))
+        instruction_rect = instruction_surface.get_rect(centerx=menu_x + menu_width//2, 
+                                                       y=menu_y + menu_height - 30)
+        self.screen.blit(instruction_surface, instruction_rect)
+    
     def draw(self):
-        """Update the display only."""
+        """Render the complete game screen."""
+        # Clear screen
+        self.screen.fill(self.BLACK)
+        
+        # Draw game components
+        self.draw_map()
+        self.draw_survivor_tokens()
+        self.draw_zombie_tokens()
+        self.draw_survivor_cards()
+        self.draw_turn_info()
+        self.draw_action_menu()
+        
+        # Update display
         pygame.display.flip()
 
     def run(self):
         """Main game loop."""
         print("Starting game window...")
+        last_time = pygame.time.get_ticks()
+        
         while self.running:
+            # Calculate delta time
+            current_time = pygame.time.get_ticks()
+            dt = current_time - last_time
+            last_time = current_time
+            
             self.handle_events()
-            self.update()
+            self.update(dt)
             self.draw()
             self.clock.tick(60)  # 60 FPS
 
