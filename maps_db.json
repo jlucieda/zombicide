@@ -2,6 +2,7 @@
   "maps": [
     {
       "name": "Map 0",
+      "num_survivors": 2,
       "tiles": [
         [
           {

@@ -22,7 +22,7 @@ class GameWindow:
         self.map_x = 0 # (width - self.map_size) // 2  --> Center horizontally
         self.map_y = 0 # (height - self.map_size) // 2  --> Center vertically
         self.tile_size = 3  # 3x3 zones per tile
-        self.zone_size = 50 # self.map_size // self.tile_size  --> Size of each zone
+        self.zone_size = 150 # self.map_size // self.tile_size  --> Size of each zone
         
         # Zone colors
         self.zone_colors = {
