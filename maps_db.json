@@ -35,14 +35,14 @@
                   "features": ["building"],
                   "connections": {
                     "up": {"type": "wall"},
-                    "right": {"type": "wall"},
+                    "right": {"type": "wall", "door": true},
                     "down": {"type": "wall"}
                   }
                 },
                 {
                   "features": ["street"],
                   "connections": {
-                    "left": {"type": "wall"},
+                    "left": {"type": "wall", "door": true},
                     "right": {"type": "open"},
                     "up": {"type": "open"},
                     "down": {"type": "open"}
