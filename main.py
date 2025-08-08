@@ -1,4 +1,5 @@
 from ui.game_window import GameWindow
+from turn_system import run_turn_system
 
 def main():
     # Create game window with exact pixel dimensions (1200x900)
@@ -11,8 +12,8 @@ def main():
         # Load survivor data
         game_window.load_survivors("survivors_db.json")
         
-        # Run the game using the integrated game loop
-        game_window.run()
+        # Run the FSM/event-driven turn system
+        run_turn_system(game_window)
             
     except Exception as e:
         print(f"Error occurred: {e}")
