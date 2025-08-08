@@ -3,6 +3,16 @@
     {
       "name": "Map 0",
       "num_survivors": 2,
+      "spawn_zones": [
+        [2, 2]
+      ],
+      "objectives": [],
+      "features": ["street", "building"],
+      "size": [3, 3],
+      "description": "A small urban area with streets and buildings.",
+      "image": "map_0.png",
+      "map_id": "map_0",
+      "tileset": "urban",
       "tiles": [
         [
           {
