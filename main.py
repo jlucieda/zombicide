@@ -1,24 +1,27 @@
-from ui.game_window import GameWindow
+from core.game_application import GameApplication
+from core.game_setup import GameSetupError
 
 def main():
-    # Create game window with exact pixel dimensions (1200x900)
-    game_window = GameWindow(width=1200, height=900, title="Zombicide Game")
+    """Main entry point for the Zombicide game."""
+    # Create the game application
+    app = GameApplication(width=1200, height=900, title="Zombicide Game")
     
     try:
-        # Load the map data into the game window
-        game_window.load_map("maps_db.json", map_index=0)
+        # Load game data
+        app.load_game_data("maps_db.json", "survivors_db.json", map_index=0)
         
-        # Load survivor data
-        game_window.load_survivors("survivors_db.json")
+        # Run the game
+        app.run()
         
-        # Run the proper turn system integrated with GameWindow
-        game_window.run()
-            
+    except GameSetupError as e:
+        print(f"Game setup failed: {e}")
     except Exception as e:
-        print(f"Error occurred: {e}")
+        print(f"Unexpected error: {e}")
+        import traceback
+        traceback.print_exc()
     finally:
         # Ensure proper cleanup
-        game_window.cleanup()
+        app.cleanup()
 
 if __name__ == "__main__":
     main()
