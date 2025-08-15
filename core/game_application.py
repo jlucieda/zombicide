@@ -1,56 +1,53 @@
 """
-GameApplication coordinates all game components and manages the main game loop.
-This class brings together rendering, input handling, game state, and turn management.
+GameApplication using domain-based architecture.
+Coordinates all game systems and manages the application lifecycle.
 """
 import pygame
 import sys
 from typing import Dict, List, Any, Optional
-from .turn_manager import TurnManager, TurnPhase
+from .turn_manager import TurnManager
 from .entities import GameState
 from .game_setup import GameSetup, GameSetupError
-from ui.rendering.game_renderer import GameRenderer
-from ui.input.input_manager import InputManager, GameEvent, GameEventType
-from config.display_config import DisplayConfig
+from systems.configuration_manager import ConfigurationManager
+from systems.rendering_system import RenderingSystem
+from systems.input_system import InputSystem
+from systems.game_loop import GameLoop, GameWorld
 
 
 class GameApplication:
-    """Main game application coordinator."""
+    """Main game application using domain-based architecture."""
     
     def __init__(self, width: int = 1200, height: int = 900, title: str = "Zombicide Game"):
-        """Initialize the game application."""
+        """Initialize the game application with new systems architecture."""
         # Initialize pygame
         pygame.init()
         
-        # Configuration
-        self.config = DisplayConfig()
-        self.config.WINDOW_WIDTH = width
-        self.config.WINDOW_HEIGHT = height
+        # Configuration management
+        self.config_manager = ConfigurationManager()
+        self.config_manager.update_window_size(width, height)
+        self.config_manager.initialize_pygame_dependent_configs()
         
         # Pygame setup
         self.screen = pygame.display.set_mode((width, height))
         pygame.display.set_caption(title)
-        self.clock = pygame.time.Clock()
-        self.running = True
         
-        # Game components
-        self.renderer = GameRenderer(self.screen, self.config)
-        self.input_manager = InputManager()
-        self.turn_manager = TurnManager()
-        self.game_state = GameState()
+        # Game systems
+        self.rendering_system = RenderingSystem(self.screen, self.config_manager)
+        self.input_system = InputSystem(self.config_manager)
         
-        # Game data
-        self.map_data: Optional[Dict[str, Any]] = None
-        self.survivors_data: List[Dict[str, Any]] = []
+        # Game world state
+        self.game_world = GameWorld()
         
-        # Setup turn manager callbacks
-        self.turn_manager.on_phase_change = self.on_phase_change
-        self.turn_manager.on_turn_change = self.on_turn_change
+        # Game components (will be initialized in load_game_data)
+        self.turn_manager = None
+        self.game_state = None
+        self.game_loop = None
         
-        print("GameApplication initialized")
+        print("GameApplication initialized with domain-based architecture")
     
     def load_game_data(self, maps_json_path: str, survivors_json_path: str, map_index: int = 0):
         """
-        Load game data from JSON files and initialize game state.
+        Load game data and initialize game systems.
         
         Args:
             maps_json_path: Path to maps JSON file
@@ -61,120 +58,52 @@ class GameApplication:
             GameSetupError: If loading fails
         """
         try:
-            self.map_data, self.survivors_data, self.game_state = GameSetup.setup_complete_game(
+            map_data, survivors_data, game_state = GameSetup.setup_complete_game(
                 maps_json_path, survivors_json_path, map_index
             )
-            print("Game data loaded successfully")
+            
+            # Initialize game components
+            self.turn_manager = TurnManager()
+            self.game_state = game_state
+            
+            # Setup turn manager callbacks
+            self.turn_manager.on_phase_change = self.on_phase_change
+            self.turn_manager.on_turn_change = self.on_turn_change
+            
+            # Update game world
+            self.game_world.map_data = map_data
+            self.game_world.survivors_data = survivors_data
+            self.game_world.survivors = game_state.survivors
+            self.game_world.zombies = game_state.zombies
+            self.game_world.game_state = game_state
+            
+            # Initialize game loop with systems
+            self.game_loop = GameLoop(
+                self.config_manager,
+                self.rendering_system,
+                self.input_system,
+                self.game_world
+            )
+            self.game_loop.set_game_components(self.turn_manager, self.game_state)
+            
+            print("Game data loaded and systems initialized successfully")
         except GameSetupError as e:
             print(f"Failed to load game data: {e}")
             raise
     
     def run(self):
-        """Run the main game loop."""
-        if not self.map_data or not self.survivors_data:
+        """Run the main game loop using the new systems architecture."""
+        if not self.game_loop:
             raise RuntimeError("Game data not loaded. Call load_game_data() first.")
-            
-        print("Starting main game loop...")
-        last_time = pygame.time.get_ticks()
         
-        while self.running:
-            # Calculate delta time
-            current_time = pygame.time.get_ticks()
-            dt = current_time - last_time
-            last_time = current_time
-            
-            # Process input
-            self.handle_input()
-            
-            # Update game state
-            self.update(dt)
-            
-            # Render frame
-            self.render()
-            
-            # Maintain target FPS
-            self.clock.tick(self.config.FPS)
-        
-        print("Game loop ended")
+        try:
+            self.game_loop.run()
+        except KeyboardInterrupt:
+            print("\nGame interrupted by user")
+        except Exception as e:
+            print(f"Game loop error: {e}")
+            raise
     
-    def handle_input(self):
-        """Process input events."""
-        events = self.input_manager.process_events()
-        
-        # Check for quit request
-        if self.input_manager.is_quit_requested():
-            self.running = False
-            return
-        
-        # Process game events
-        for event in events:
-            self.handle_game_event(event)
-    
-    def handle_game_event(self, event: GameEvent):
-        """Handle a specific game event."""
-        if event.event_type == GameEventType.PHASE_ADVANCE:
-            # Only advance if not waiting for survivor action
-            if not self.turn_manager.is_waiting_for_action():
-                print(f"Manual phase advance: {self.turn_manager.get_phase_name()}")
-                self.turn_manager.advance_phase()
-                
-        elif event.event_type == GameEventType.PAUSE_TOGGLE:
-            self.turn_manager.game_paused = not self.turn_manager.game_paused
-            print(f"Game {'paused' if self.turn_manager.game_paused else 'unpaused'}")
-            
-        elif event.event_type == GameEventType.SURVIVOR_ACTION:
-            # Handle survivor action selection during their turn
-            if (self.turn_manager.is_waiting_for_action() and 
-                self.turn_manager.get_current_phase() == TurnPhase.SURVIVOR_TURN):
-                action_index = event.data.get("action_index", -1)
-                if action_index >= 0:
-                    success = self.turn_manager.select_action(action_index)
-                    if not success:
-                        print(f"Invalid action selection: {action_index}")
-    
-    def update(self, dt: int):
-        """Update game state."""
-        if not self.running:
-            return
-            
-        # Update turn manager
-        self.turn_manager.update(dt)
-        
-        # Process current turn phase
-        current_phase = self.turn_manager.get_current_phase()
-        
-        if current_phase == TurnPhase.SURVIVOR_TURN:
-            self.turn_manager.process_survivor_turn(self.game_state)
-        elif current_phase == TurnPhase.ZOMBIE_TURN:
-            self.turn_manager.process_zombie_turn(self.game_state)
-        elif current_phase == TurnPhase.ZOMBIE_SPAWN:
-            self.turn_manager.process_zombie_spawn()
-        elif current_phase == TurnPhase.TURN_END:
-            self.turn_manager.process_turn_end()
-    
-    def render(self):
-        """Render the current frame."""
-        # Get current state for rendering
-        current_survivor = self.turn_manager.get_current_survivor()
-        available_actions = None
-        
-        # Only show action menu if waiting for input
-        if self.turn_manager.is_waiting_for_action():
-            available_actions = self.turn_manager.get_available_actions()
-        
-        # Get turn information
-        turn_info = self.turn_manager.get_turn_info()
-        
-        # Render complete frame
-        self.renderer.render_frame(
-            map_data=self.map_data,
-            survivors=self.game_state.survivors,
-            zombies=self.game_state.zombies,
-            survivors_data=self.survivors_data,
-            turn_info=turn_info,
-            current_survivor=current_survivor,
-            available_actions=available_actions
-        )
     
     def on_phase_change(self, new_phase):
         """Callback when turn phase changes."""
@@ -191,11 +120,14 @@ class GameApplication:
     
     def get_game_info(self) -> Dict[str, Any]:
         """Get information about the current game state (for debugging)."""
+        if not self.game_loop or not self.turn_manager:
+            return {"status": "not_initialized"}
+        
         return {
-            "running": self.running,
-            "turn_info": self.turn_manager.get_turn_info(),
-            "survivors_count": len(self.game_state.survivors),
-            "zombies_count": len(self.game_state.zombies),
-            "map_loaded": self.map_data is not None,
-            "survivors_loaded": len(self.survivors_data) > 0
+            "running": self.game_loop.running,
+            "turn_info": self.turn_manager.get_turn_info() if self.turn_manager else {},
+            "survivors_count": len(self.game_state.survivors) if self.game_state else 0,
+            "zombies_count": len(self.game_state.zombies) if self.game_state else 0,
+            "map_loaded": self.game_world.map_data is not None,
+            "survivors_loaded": len(self.game_world.survivors_data) > 0
         }
