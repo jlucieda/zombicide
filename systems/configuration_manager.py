@@ -45,7 +45,7 @@ class DisplayConfig:
     
     # Card properties
     card_width: int = 350
-    card_height: int = 500
+    card_height: int = 200
     card_start_x: int = 550
     card_spacing: int = 15
     
@@ -66,8 +66,8 @@ class DisplayConfig:
             self.fonts = {
                 'xlarge': pygame.font.Font(None, 32),
                 'large': pygame.font.Font(None, 24),
-                'medium': pygame.font.Font(None, 18),
-                'small': pygame.font.Font(None, 14)
+                'medium': pygame.font.Font(None, 20),
+                'small': pygame.font.Font(None, 16)
             }
             self._fonts_initialized = True
     

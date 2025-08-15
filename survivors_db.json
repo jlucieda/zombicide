@@ -47,6 +47,30 @@
         "inv_3": "empty",
         "inv_4": "empty"
       }
+    },
+     {
+      "name": "Amy",
+      "class": "normal",
+      "wounds": 0,
+      "exp": 0,
+      "level": "blue",
+      "skills": {
+        "skill_blue": "+1 free move action",
+        "skill_yellow": "+1 Action",
+        "skill_orange1": "+1 free melee action",
+        "skill_orange2": "+1 free ranged action",
+        "skill_red1": "+1 die: Combat",
+        "skill_red2": "+1 to dice roll: Combat",
+        "skill_red3": "Medic"
+      },
+      "equipment": {
+        "hand_right": "pistol",
+        "hand_left": "iron bar",
+        "inv_1": "empty",
+        "inv_2": "empty",
+        "inv_3": "empty",
+        "inv_4": "empty"
+      }
     }
   ]
 }
