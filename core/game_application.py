@@ -4,9 +4,8 @@ Coordinates all game systems and manages the application lifecycle.
 """
 import pygame
 import sys
-from typing import Dict, List, Any, Optional
+from typing import Dict, Any
 from .turn_manager import TurnManager
-from .entities import GameState
 from .game_setup import GameSetup, GameSetupError
 from systems.configuration_manager import ConfigurationManager
 from systems.rendering_system import RenderingSystem
@@ -105,7 +104,7 @@ class GameApplication:
             raise
     
     
-    def on_phase_change(self, new_phase):
+    def on_phase_change(self, _new_phase):
         """Callback when turn phase changes."""
         print(f"Phase changed to: {self.turn_manager.get_phase_name()}")
     

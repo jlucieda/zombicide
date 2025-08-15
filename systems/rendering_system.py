@@ -4,7 +4,7 @@ Domain-focused rendering architecture with specialized renderers.
 """
 import pygame
 from typing import List, Optional, Dict, Any
-from abc import ABC, abstractmethod
+from abc import ABC
 
 from core.entities import Survivor, Zombie
 from .configuration_manager import ConfigurationManager
@@ -207,37 +207,108 @@ class EntityRenderer(BaseRenderer):
 class UIRenderer(BaseRenderer):
     """Handles UI elements rendering (menus, HUD, cards)."""
     
-    def render_turn_info(self, turn_info: Dict[str, Any]):
-        """Render turn information HUD."""
-        info_x = 10
+    def render_turn_info(self, turn_info: Dict[str, Any], current_survivor=None, available_actions=None, survivors=None):
+        """Render revamped turn control window in upper right corner."""
+        # Calculate dynamic height based on content (survivors + phases + controls)
+        info_width = 220  # Narrower to avoid overlapping survivor cards
+        base_height = 200  # Smaller height to be more compact
+        info_x = self.config.display.window_width - info_width - 15  # More margin from right edge
         info_y = 10
-        line_height = 25
+        line_height = 16  # Smaller line height for compactness
         
-        info_rect = pygame.Rect(info_x - 5, info_y - 5, 300, 120)
+        # Background
+        info_rect = pygame.Rect(info_x - 5, info_y - 5, info_width, base_height)
         pygame.draw.rect(self.screen, (0, 0, 0, 180), info_rect)
         pygame.draw.rect(self.screen, self.config.get_color('white'), info_rect, 2)
         
-        turn_text = f"Turn: {turn_info['turn_number']}"
+        current_y = info_y + 5
+        
+        # 1. Turn number at the top (smaller font for compact window)
+        turn_text = f"Turn {turn_info['turn_number']}"
         turn_surface = self.config.get_font('large').render(turn_text, True, self.config.get_color('white'))
-        self.screen.blit(turn_surface, (info_x, info_y))
+        turn_rect = turn_surface.get_rect(centerx=info_x + info_width//2, y=current_y)
+        self.screen.blit(turn_surface, turn_rect)
+        current_y += 28
         
-        phase_text = f"Phase: {turn_info['phase_name']}"
-        phase_surface = self.config.get_font('medium').render(phase_text, True, self.config.get_color('white'))
-        self.screen.blit(phase_surface, (info_x, info_y + line_height))
+        # 2. Phase list structure
+        current_phase = turn_info.get('phase_name', '')
         
-        status = "Complete" if turn_info['phase_complete'] else "In Progress"
-        status_color = self.config.get_color('white') if turn_info['phase_complete'] else self.config.get_color('yellow')
-        status_text = f"Status: {status}"
-        status_surface = self.config.get_font('small').render(status_text, True, status_color)
-        self.screen.blit(status_surface, (info_x, info_y + line_height * 2))
+        # Helper function to draw arrow and text
+        def draw_phase_item(text, is_current, y_pos, indent=0):
+            arrow_x = info_x + 10 + indent
+            text_x = arrow_x + 20
+            
+            # Draw yellow arrow if current phase
+            if is_current:
+                # Yellow arrow pointing right (triangle)
+                arrow_points = [
+                    (arrow_x, y_pos + 4),
+                    (arrow_x + 12, y_pos + 9),
+                    (arrow_x, y_pos + 14)
+                ]
+                pygame.draw.polygon(self.screen, self.config.get_color('yellow'), arrow_points)
+            
+            # Draw text (smaller font for compact window)
+            color = self.config.get_color('white') if is_current else (180, 180, 180)
+            text_surface = self.config.get_font('medium').render(text, True, color)
+            self.screen.blit(text_surface, (text_x, y_pos))
+            
+            return y_pos + line_height + 1
         
-        controls_text = "SPACE: Next Phase | P: Pause | ESC: Quit"
-        controls_surface = self.config.get_font('small').render(controls_text, True, (200, 200, 200))
-        self.screen.blit(controls_surface, (info_x, info_y + line_height * 3))
+        # a) Survivor Turn
+        is_survivor_turn = 'Survivor' in current_phase
+        current_y = draw_phase_item('Survivor Turn', is_survivor_turn, current_y)
+        
+        # List all survivors under Survivor Turn with action counts
+        if survivors:
+            for survivor in survivors:
+                if survivor.alive:
+                    # Format: "Eva (3/3)" showing current/max actions
+                    survivor_text = f"{survivor.name} ({survivor.actions_remaining}/3)"
+                    is_current_survivor = (current_survivor and 
+                                         current_survivor.name == survivor.name and 
+                                         is_survivor_turn)
+                    current_y = draw_phase_item(survivor_text, is_current_survivor, current_y, indent=15)
+        
+        # b) Zombie Turn
+        is_zombie_turn = 'Zombie' in current_phase and 'Spawn' not in current_phase
+        current_y = draw_phase_item('Zombie Turn', is_zombie_turn, current_y)
+        
+        # c) Zombie Spawn
+        is_zombie_spawn = 'Spawn' in current_phase
+        current_y = draw_phase_item('Zombie Spawn', is_zombie_spawn, current_y)
+        
+        # d) End Turn
+        is_end_turn = 'End' in current_phase
+        current_y = draw_phase_item('End Turn', is_end_turn, current_y)
+        
+        # Add spacing before actions
+        current_y += 10
+        
+        # Show available actions for current survivor
+        if current_survivor and available_actions and is_survivor_turn:
+            # Separator line
+            pygame.draw.line(self.screen, self.config.get_color('white'), 
+                           (info_x + 5, current_y), (info_x + info_width - 15, current_y), 1)
+            current_y += 15
+            
+            # Actions header
+            actions_text = "Available Actions:"
+            actions_surface = self.config.get_font('small').render(actions_text, True, self.config.get_color('cyan'))
+            self.screen.blit(actions_surface, (info_x + 10, current_y))
+            current_y += 18
+            
+            # List actions
+            for i, action in enumerate(available_actions):
+                action_text = f"{i+1}. {action}"
+                action_surface = self.config.get_font('small').render(action_text, True, self.config.get_color('white'))
+                self.screen.blit(action_surface, (info_x + 15, current_y))
+                current_y += 16
+    
 
     def render_survivor_cards(self, survivors_data: List[Dict[str, Any]], survivors: List[Survivor], 
                              current_survivor: Optional[Survivor] = None):
-        """Render survivor information cards."""
+        """Render enhanced survivor information cards with skills, weapons, and inventory."""
         if not survivors_data:
             return
         
@@ -254,71 +325,148 @@ class UIRenderer(BaseRenderer):
             is_active = (current_survivor and survivor_entity and 
                         current_survivor.id == survivor_entity.id)
             
-            border_color = self.config.get_color('cyan') if is_active else self.config.get_color('white')
-            border_width = 5 if is_active else 3
+            self._render_single_survivor_card(card_x, card_y, survivor_data, survivor_entity, is_active)
+    
+    def _render_single_survivor_card(self, card_x: int, card_y: int, survivor_data: Dict[str, Any], 
+                                   survivor_entity: Optional[Survivor], is_active: bool):
+        """Render a single survivor card with all details."""
+        # Card background
+        border_color = self.config.get_color('cyan') if is_active else self.config.get_color('white')
+        border_width = 5 if is_active else 3
+        
+        pygame.draw.rect(self.screen, border_color, 
+                       (card_x, card_y, self.config.display.card_width, self.config.display.card_height), border_width)
+        pygame.draw.rect(self.screen, (200, 200, 200), 
+                       (card_x+border_width, card_y+border_width, 
+                        self.config.display.card_width-2*border_width, self.config.display.card_height-2*border_width))
+        
+        y_offset = 10
+        line_height = 18
+        
+        # Name, level circle, XP, and wounds all on the same line
+        name_color = self.config.get_color('cyan') if is_active else self.config.get_color('black')
+        name_surface = self.config.get_font('xlarge').render(survivor_data['name'], True, name_color)
+        self.screen.blit(name_surface, (card_x + 10, card_y + y_offset))
+        
+        # Level color indicator circle after name (sized to match font height)
+        name_width = name_surface.get_width()
+        name_height = name_surface.get_height()
+        level_color = self.config.display.level_colors.get(survivor_data['level'], self.config.get_color('gray'))
+        circle_radius = name_height // 2 - 2  # Slightly smaller than half font height
+        circle_x = card_x + 10 + name_width + 15
+        circle_y = card_y + y_offset + name_height // 2  # Center with name text
+        pygame.draw.circle(self.screen, level_color, (circle_x, circle_y), circle_radius)
+        pygame.draw.circle(self.screen, self.config.get_color('black'), (circle_x, circle_y), circle_radius, 2)
+        
+        # XP and Wounds on same line as name (right side)
+        info_text = f"XP: {survivor_data['exp']} | Wounds: {survivor_data['wounds']}/2"
+        info_surface = self.config.get_font('medium').render(info_text, True, self.config.get_color('black'))
+        info_x = card_x + self.config.display.card_width - info_surface.get_width() - 10
+        self.screen.blit(info_surface, (info_x, card_y + y_offset + 5))  # Slight vertical offset to align with name
+        
+        y_offset += 25
+        
+        # Actions remaining (if available)
+        if survivor_entity:
+            actions_text = f"Actions: {survivor_entity.actions_remaining}/3"
+            actions_color = self.config.get_color('red') if survivor_entity.actions_remaining == 0 else self.config.get_color('black')
+            actions_surface = self.config.get_font('medium').render(actions_text, True, actions_color)
+            self.screen.blit(actions_surface, (card_x + 10, card_y + y_offset))
+        
+        y_offset += 30
+        
+        # Weapons in hands section - all on one line with brackets
+        equipment = survivor_data.get('equipment', {})
+        right_hand = equipment.get('hand_right', 'empty').replace('_', ' ').title()
+        left_hand = equipment.get('hand_left', 'empty').replace('_', ' ').title()
+        
+        weapons_text = f"Weapons: [{left_hand}]    [{right_hand}]"
+        weapons_surface = self.config.get_font('medium').render(weapons_text, True, self.config.get_color('black'))
+        self.screen.blit(weapons_surface, (card_x + 10, card_y + y_offset))
+        y_offset += line_height + 10
+        
+        # Inventory section
+        inv_title = self.config.get_font('medium').render("Inventory:", True, self.config.get_color('black'))
+        self.screen.blit(inv_title, (card_x + 10, card_y + y_offset))
+        y_offset += line_height + 5
+        
+        # Inventory slots
+        inventory_items = []
+        for slot in ['inv_1', 'inv_2', 'inv_3', 'inv_4']:
+            item = equipment.get(slot, 'empty')
+            if item != 'empty':
+                inventory_items.append(item.replace('_', ' ').title())
+        
+        if inventory_items:
+            for item in inventory_items:
+                item_surface = self.config.get_font('small').render(f"• {item}", True, self.config.get_color('black'))
+                self.screen.blit(item_surface, (card_x + 15, card_y + y_offset))
+                y_offset += line_height
+        else:
+            empty_surface = self.config.get_font('small').render("• Empty", True, self.config.get_color('gray'))
+            self.screen.blit(empty_surface, (card_x + 15, card_y + y_offset))
+            y_offset += line_height
+        
+        y_offset += 15
+        
+        # Skills section
+        skills_title = self.config.get_font('medium').render("Skills:", True, self.config.get_color('black'))
+        self.screen.blit(skills_title, (card_x + 10, card_y + y_offset))
+        y_offset += line_height + 5
+        
+        skills = survivor_data.get('skills', {})
+        current_level = survivor_data['level']
+        
+        # Show skills based on level (blue -> yellow -> orange -> red)
+        level_order = ['blue', 'yellow', 'orange1', 'orange2', 'red1', 'red2', 'red3']
+        current_level_index = {'blue': 0, 'yellow': 1, 'orange': 3, 'red': 6}.get(current_level, 0)
+        
+        skills_to_show = []
+        for i, level in enumerate(level_order):
+            if i <= current_level_index:
+                skill_key = f"skill_{level}"
+                if skill_key in skills:
+                    skills_to_show.append(skills[skill_key])
+        
+        # Display current skills
+        for skill in skills_to_show:
+            # Wrap long skill text
+            skill_lines = self._wrap_text(skill, self.config.display.card_width - 40)
+            for line in skill_lines:
+                if y_offset + line_height > card_y + self.config.display.card_height - 10:
+                    break  # Don't draw outside card bounds
+                skill_surface = self.config.get_font('small').render(f"• {line}", True, self.config.get_color('black'))
+                self.screen.blit(skill_surface, (card_x + 15, card_y + y_offset))
+                y_offset += line_height
+    
+    def _wrap_text(self, text: str, max_width: int) -> List[str]:
+        """Wrap text to fit within specified width."""
+        words = text.split()
+        lines = []
+        current_line = ""
+        
+        for word in words:
+            test_line = current_line + (" " if current_line else "") + word
+            test_surface = self.config.get_font('small').render(test_line, True, self.config.get_color('black'))
             
-            pygame.draw.rect(self.screen, border_color, 
-                           (card_x, card_y, self.config.display.card_width, self.config.display.card_height), border_width)
-            pygame.draw.rect(self.screen, (200, 200, 200), 
-                           (card_x+border_width, card_y+border_width, 
-                            self.config.display.card_width-2*border_width, self.config.display.card_height-2*border_width))
-            
-            name_color = self.config.get_color('cyan') if is_active else self.config.get_color('black')
-            name_surface = self.config.get_font('large').render(survivor_data['name'], True, name_color)
-            name_rect = name_surface.get_rect(centerx=card_x + self.config.display.card_width//2, y=card_y + 10)
-            self.screen.blit(name_surface, name_rect)
-            
-            if survivor_entity:
-                actions_text = f"Actions: {survivor_entity.actions_remaining}/3"
-                actions_color = self.config.get_color('cyan') if is_active else self.config.get_color('black')
-                actions_surface = self.config.get_font('medium').render(actions_text, True, actions_color)
-                self.screen.blit(actions_surface, (card_x + 10, card_y + 35))
-            
-            level_color = self.config.display.level_colors.get(survivor_data['level'], self.config.get_color('gray'))
-            level_rect = pygame.Rect(card_x + 20, card_y + 60, self.config.display.card_width - 40, 25)
-            pygame.draw.rect(self.screen, level_color, level_rect)
-            pygame.draw.rect(self.screen, self.config.get_color('black'), level_rect, 1)
-            
-            level_surface = self.config.get_font('medium').render(survivor_data['level'].upper(), True, self.config.get_color('white'))
-            level_text_rect = level_surface.get_rect(center=level_rect.center)
-            self.screen.blit(level_surface, level_text_rect)
-            
-            wounds_surface = self.config.get_font('medium').render(f"Wounds: {survivor_data['wounds']}", True, self.config.get_color('black'))
-            self.screen.blit(wounds_surface, (card_x + 10, card_y + 95))
-            
-            exp_surface = self.config.get_font('medium').render(f"XP: {survivor_data['exp']}", True, self.config.get_color('black'))
-            self.screen.blit(exp_surface, (card_x + 10, card_y + 115))
+            if test_surface.get_width() <= max_width:
+                current_line = test_line
+            else:
+                if current_line:
+                    lines.append(current_line)
+                    current_line = word
+                else:
+                    lines.append(word)  # Single word too long, add anyway
+        
+        if current_line:
+            lines.append(current_line)
+        
+        return lines
 
-    def render_action_menu(self, current_survivor: Optional[Survivor], available_actions: List[str]):
-        """Render action selection menu."""
-        if not current_survivor or not available_actions:
-            return
-        
-        menu_x = (self.config.display.window_width - self.config.display.menu_width) // 2
-        menu_y = (self.config.display.window_height - self.config.display.menu_height) // 2
-        
-        menu_rect = pygame.Rect(menu_x, menu_y, self.config.display.menu_width, self.config.display.menu_height)
-        pygame.draw.rect(self.screen, (50, 50, 50), menu_rect)
-        pygame.draw.rect(self.screen, self.config.get_color('white'), menu_rect, 3)
-        
-        title_text = f"{current_survivor.name}'s Turn"
-        title_surface = self.config.get_font('large').render(title_text, True, self.config.get_color('white'))
-        title_rect = title_surface.get_rect(centerx=menu_x + self.config.display.menu_width//2, y=menu_y + 10)
-        self.screen.blit(title_surface, title_rect)
-        
-        actions_start_y = menu_y + 50
-        line_height = 25
-        
-        for i, action in enumerate(available_actions):
-            action_text = f"{i+1}. {action}"
-            action_surface = self.config.get_font('medium').render(action_text, True, self.config.get_color('white'))
-            self.screen.blit(action_surface, (menu_x + 20, actions_start_y + i * line_height))
-        
-        instruction_text = "Press 1, 2, or 3 to select action"
-        instruction_surface = self.config.get_font('small').render(instruction_text, True, (200, 200, 200))
-        instruction_rect = instruction_surface.get_rect(centerx=menu_x + self.config.display.menu_width//2, 
-                                                       y=menu_y + self.config.display.menu_height - 30)
-        self.screen.blit(instruction_surface, instruction_rect)
+    def render_action_menu(self, _current_survivor: Optional[Survivor], _available_actions: List[str]):
+        """Action menu is now integrated into turn info window - this method does nothing."""
+        # Action menu functionality moved to render_turn_info
+        pass
 
 
 class RenderingSystem:
@@ -353,7 +501,12 @@ class RenderingSystem:
         
         # Render UI elements
         if 'turn_info' in ui_state:
-            self.ui_renderer.render_turn_info(ui_state['turn_info'])
+            self.ui_renderer.render_turn_info(
+                ui_state['turn_info'],
+                ui_state.get('current_survivor'),
+                ui_state.get('available_actions') if ui_state.get('show_action_menu') else None,
+                game_world.get('survivors', [])  # Pass survivor list
+            )
         
         if 'survivors_data' in game_world and 'survivors' in game_world:
             self.ui_renderer.render_survivor_cards(
@@ -362,11 +515,7 @@ class RenderingSystem:
                 ui_state.get('current_survivor')
             )
         
-        if ui_state.get('show_action_menu') and ui_state.get('available_actions'):
-            self.ui_renderer.render_action_menu(
-                ui_state.get('current_survivor'),
-                ui_state['available_actions']
-            )
+        # Action menu is now integrated into turn_info window - no separate rendering needed
         
         # Update display
         pygame.display.flip()

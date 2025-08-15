@@ -44,10 +44,10 @@ class DisplayConfig:
     token_border_width: int = 2
     
     # Card properties
-    card_width: int = 280
-    card_height: int = 380
+    card_width: int = 350
+    card_height: int = 500
     card_start_x: int = 550
-    card_spacing: int = 20
+    card_spacing: int = 15
     
     # Action menu properties
     menu_width: int = 300
@@ -64,6 +64,7 @@ class DisplayConfig:
         """Initialize pygame fonts. Call after pygame.init()."""
         if not self._fonts_initialized:
             self.fonts = {
+                'xlarge': pygame.font.Font(None, 32),
                 'large': pygame.font.Font(None, 24),
                 'medium': pygame.font.Font(None, 18),
                 'small': pygame.font.Font(None, 14)
