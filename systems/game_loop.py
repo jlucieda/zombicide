@@ -135,6 +135,37 @@ class GameActionProcessor:
                         if not success:
                             state_changes["invalid_target"] = target_index
             
+            elif action_type == "move":
+                if self.turn_manager.is_waiting_for_action():
+                    direction_str = action.get("direction")
+                    if direction_str:
+                        # Import Direction here to avoid circular imports
+                        from core.actions import Direction
+                        direction_map = {
+                            "UP": Direction.UP,
+                            "DOWN": Direction.DOWN,
+                            "LEFT": Direction.LEFT,
+                            "RIGHT": Direction.RIGHT
+                        }
+                        direction = direction_map.get(direction_str)
+                        if direction:
+                            success = self.turn_manager.execute_move(direction)
+                            state_changes["move_executed"] = success
+                            if not success:
+                                state_changes["invalid_move"] = direction_str
+            
+            elif action_type == "attack":
+                if self.turn_manager.is_waiting_for_action():
+                    success = self.turn_manager.execute_attack()
+                    state_changes["attack_executed"] = success
+                    if not success:
+                        state_changes["invalid_attack"] = True
+            
+            elif action_type == "skip_turn":
+                if self.turn_manager.is_waiting_for_action():
+                    success = self.turn_manager.execute_skip_turn()
+                    state_changes["skip_turn_executed"] = success
+            
             elif action_type == "toggle_debug":
                 # This would be handled by the configuration manager
                 state_changes["debug_toggled"] = True
@@ -240,22 +271,7 @@ class GameLoop:
     
     def handle_input(self):
         """Process input through the input system."""
-        # Get raw pygame events for turn manager before they're consumed
-        import pygame
-        raw_events = pygame.event.get()
-        
-        # Pass raw events to turn manager
-        if hasattr(self, 'turn_manager') and self.turn_manager:
-            for pygame_event in raw_events:
-                if pygame_event.type == pygame.QUIT:
-                    self.running = False
-                else:
-                    self.turn_manager.handle_event(pygame_event)
-        
-        # Put events back for input system processing
-        for event in raw_events:
-            pygame.event.post(event)
-        
+        # Let the input system handle all events
         events = self.input_system.process_input()
         
         if self.input_system.is_quit_requested():

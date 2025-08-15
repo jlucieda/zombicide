@@ -14,6 +14,9 @@ class GameEventType(Enum):
     PHASE_ADVANCE = "phase_advance"
     PAUSE_TOGGLE = "pause_toggle"
     SURVIVOR_ACTION = "survivor_action"
+    MOVE = "move"
+    ATTACK = "attack"
+    SKIP_TURN = "skip_turn"
     UNKNOWN = "unknown"
 
 
@@ -78,6 +81,23 @@ class InputManager:
             
         elif key == pygame.K_3:
             return GameEvent(GameEventType.SURVIVOR_ACTION, {"action_index": 2})
+        
+        # Movement with cursor keys
+        elif key == pygame.K_UP:
+            return GameEvent(GameEventType.MOVE, {"direction": "UP"})
+        
+        elif key == pygame.K_DOWN:
+            return GameEvent(GameEventType.MOVE, {"direction": "DOWN"})
+        
+        elif key == pygame.K_LEFT:
+            return GameEvent(GameEventType.MOVE, {"direction": "LEFT"})
+        
+        elif key == pygame.K_RIGHT:
+            return GameEvent(GameEventType.MOVE, {"direction": "RIGHT"})
+        
+        # Attack with 'a' key
+        elif key == pygame.K_a:
+            return GameEvent(GameEventType.ATTACK)
             
         return GameEvent(GameEventType.UNKNOWN, {"key": key})
     

@@ -199,6 +199,96 @@ class TurnManager:
         
         return success
     
+    def execute_move(self, direction):
+        """Execute a move action directly using cursor keys."""
+        from .actions import Action, ActionType, ActionValidator
+        
+        if not self.current_survivor or not hasattr(self, '_current_game_state'):
+            return False
+        
+        # Validate the move
+        if not ActionValidator.validate_move(self.current_survivor.position, direction):
+            print(f"Invalid move {direction.name}")
+            return False
+        
+        # Create and execute the move action
+        new_position = self.current_survivor.position + direction
+        action = Action(
+            action_type=ActionType.MOVE,
+            actor_id=self.current_survivor.id,
+            target_position=new_position,
+            direction=direction
+        )
+        
+        result = self._current_game_state.execute_action(action)
+        print(f"  {result.message}")
+        
+        if result.success:
+            # Check if survivor is done with actions
+            if not self.current_survivor.can_act():
+                if self.turn_order_manager:
+                    self.turn_order_manager.get_next_survivor()
+                else:
+                    self.current_survivor_index += 1
+                # Find next survivor
+                self._find_next_survivor()
+        
+        return result.success
+    
+    def execute_attack(self):
+        """Execute an attack action directly using 'a' key."""
+        from .actions import Action, ActionType
+        
+        if not self.current_survivor or not hasattr(self, '_current_game_state'):
+            return False
+        
+        # Find a zombie in the same zone
+        for zombie in self._current_game_state.zombies:
+            if zombie.alive and zombie.position == self.current_survivor.position:
+                action = Action(
+                    action_type=ActionType.ATTACK,
+                    actor_id=self.current_survivor.id,
+                    target_position=zombie.position,
+                    target_id=zombie.id
+                )
+                result = self._current_game_state.execute_action(action)
+                print(f"  {result.message}")
+                
+                if result.success:
+                    # Check if survivor is done with actions
+                    if not self.current_survivor.can_act():
+                        if self.turn_order_manager:
+                            self.turn_order_manager.get_next_survivor()
+                        else:
+                            self.current_survivor_index += 1
+                        # Find next survivor
+                        self._find_next_survivor()
+                
+                return result.success
+        
+        print("  No zombie found to attack")
+        return False
+    
+    def execute_skip_turn(self):
+        """Skip remaining actions for current survivor."""
+        if not self.current_survivor:
+            return False
+        
+        # Skip all remaining actions
+        self.current_survivor.actions_remaining = 0
+        print(f"  {self.current_survivor.name} skipped remaining actions")
+        
+        # Move to next survivor
+        if self.turn_order_manager:
+            self.turn_order_manager.get_next_survivor()
+        else:
+            self.current_survivor_index += 1
+        
+        # Find next survivor
+        self._find_next_survivor()
+        
+        return True
+    
     def get_current_survivor(self):
         """Get the currently active survivor."""
         return self.current_survivor
@@ -248,14 +338,10 @@ class TurnManager:
     
     def _get_available_actions(self, survivor, game_state):
         """Get available actions for a survivor."""
-        from .actions import Direction, ActionValidator
-        
         actions = []
         
-        # Add move actions
-        for direction in Direction:
-            if ActionValidator.validate_move(survivor.position, direction):
-                actions.append(f"Move {direction.name}")
+        # Show cursor key instructions instead of individual move actions
+        actions.append("Use cursor keys to move")
         
         # Add attack actions
         targets_in_zone = []
@@ -264,10 +350,10 @@ class TurnManager:
                 targets_in_zone.append(zombie)
         
         if targets_in_zone:
-            actions.append("Attack zombie")
+            actions.append("Press 'a' to attack")
         
-        # Always allow skipping turn
-        actions.append("Skip remaining actions")
+        # Show skip instruction
+        actions.append("Press 'space' to skip turn")
         
         return actions
     

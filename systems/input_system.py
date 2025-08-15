@@ -17,6 +17,9 @@ class InputEventType(Enum):
     PAUSE_TOGGLE = "pause_toggle"
     SURVIVOR_ACTION = "survivor_action"
     DEBUG_TOGGLE = "debug_toggle"
+    MOVE = "move"
+    ATTACK = "attack"
+    SKIP_TURN = "skip_turn"
     UNKNOWN = "unknown"
 
 
@@ -90,6 +93,27 @@ class InputProcessor:
         elif key == pygame.K_F1:  # Debug toggle
             return InputEvent(InputEventType.DEBUG_TOGGLE, timestamp=timestamp)
         
+        # Movement with cursor keys
+        elif key == pygame.K_UP:
+            return InputEvent(InputEventType.MOVE, {"direction": "UP"}, timestamp)
+        
+        elif key == pygame.K_DOWN:
+            return InputEvent(InputEventType.MOVE, {"direction": "DOWN"}, timestamp)
+        
+        elif key == pygame.K_LEFT:
+            return InputEvent(InputEventType.MOVE, {"direction": "LEFT"}, timestamp)
+        
+        elif key == pygame.K_RIGHT:
+            return InputEvent(InputEventType.MOVE, {"direction": "RIGHT"}, timestamp)
+        
+        # Attack with 'a' key
+        elif key == pygame.K_a:
+            return InputEvent(InputEventType.ATTACK, timestamp=timestamp)
+        
+        # Space key - context sensitive (phase advance OR skip turn)
+        elif key == key_bindings['phase_advance']:  # This is space key
+            return InputEvent(InputEventType.PHASE_ADVANCE, timestamp=timestamp)
+        
         return InputEvent(InputEventType.UNKNOWN, {"key": key}, timestamp)
     
     def is_quit_requested(self) -> bool:
@@ -114,6 +138,9 @@ class GameEventHandler:
         self.event_handlers[InputEventType.PAUSE_TOGGLE] = self._handle_pause_toggle
         self.event_handlers[InputEventType.SURVIVOR_ACTION] = self._handle_survivor_action
         self.event_handlers[InputEventType.DEBUG_TOGGLE] = self._handle_debug_toggle
+        self.event_handlers[InputEventType.MOVE] = self._handle_move
+        self.event_handlers[InputEventType.ATTACK] = self._handle_attack
+        self.event_handlers[InputEventType.SKIP_TURN] = self._handle_skip_turn
     
     def handle_event(self, event: InputEvent, game_state: Dict[str, Any]) -> Dict[str, Any]:
         """Handle an input event and return resulting game state changes."""
@@ -123,8 +150,12 @@ class GameEventHandler:
         return {}
     
     def _handle_phase_advance(self, event: InputEvent, game_state: Dict[str, Any]) -> Dict[str, Any]:
-        """Handle phase advance request."""
-        return {"action": "advance_phase"}
+        """Handle phase advance request or skip turn during survivor turn."""
+        # During survivor turn, space should skip turn instead of advance phase
+        if game_state.get("waiting_for_action", False):
+            return {"action": "skip_turn"}
+        else:
+            return {"action": "advance_phase"}
     
     def _handle_pause_toggle(self, event: InputEvent, game_state: Dict[str, Any]) -> Dict[str, Any]:
         """Handle pause toggle."""
@@ -141,6 +172,26 @@ class GameEventHandler:
     def _handle_debug_toggle(self, event: InputEvent, game_state: Dict[str, Any]) -> Dict[str, Any]:
         """Handle debug mode toggle."""
         return {"action": "toggle_debug"}
+    
+    def _handle_move(self, event: InputEvent, game_state: Dict[str, Any]) -> Dict[str, Any]:
+        """Handle movement input."""
+        direction = event.data.get("direction") if event.data else None
+        return {
+            "action": "move",
+            "direction": direction
+        }
+    
+    def _handle_attack(self, event: InputEvent, game_state: Dict[str, Any]) -> Dict[str, Any]:
+        """Handle attack input."""
+        return {
+            "action": "attack"
+        }
+    
+    def _handle_skip_turn(self, event: InputEvent, game_state: Dict[str, Any]) -> Dict[str, Any]:
+        """Handle skip turn input."""
+        return {
+            "action": "skip_turn"
+        }
 
 
 class UIEventHandler:
