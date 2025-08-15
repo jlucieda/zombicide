@@ -155,6 +155,7 @@ class GameEventHandler:
         if game_state.get("waiting_for_action", False):
             return {"action": "skip_turn"}
         else:
+            # This could be phase advance or waiting for phase advance
             return {"action": "advance_phase"}
     
     def _handle_pause_toggle(self, event: InputEvent, game_state: Dict[str, Any]) -> Dict[str, Any]:

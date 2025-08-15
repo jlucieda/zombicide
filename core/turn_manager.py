@@ -38,6 +38,10 @@ class TurnManager:
         self.available_target_survivors = []
         self.combat_message = ""
         
+        # Turn transition system
+        self.waiting_for_phase_advance = False
+        self.phase_advance_message = ""
+        
         # New turn order management
         self.turn_order_manager: TurnOrderManager = None
         
@@ -297,6 +301,26 @@ class TurnManager:
         """Check if the game is waiting for a survivor action."""
         return self.waiting_for_action
     
+    def is_waiting_for_phase_advance(self):
+        """Check if the game is waiting for user to advance to next phase."""
+        return self.waiting_for_phase_advance
+    
+    def get_phase_advance_message(self):
+        """Get the phase advance message to display."""
+        return self.phase_advance_message
+    
+    def advance_to_next_phase(self):
+        """Advance from waiting state to next phase."""
+        if self.waiting_for_phase_advance:
+            print(f"Advancing from {self.get_phase_name()} to next phase...")
+            self.waiting_for_phase_advance = False
+            self.phase_advance_message = ""
+            # Actually advance the phase, don't just mark it complete
+            self.advance_phase()
+            print(f"Phase advanced to: {self.get_phase_name()}")
+            return True
+        return False
+    
     def get_available_actions(self):
         """Get the list of available actions for the current survivor."""
         return self.available_actions
@@ -455,10 +479,13 @@ class TurnManager:
                 for i, action in enumerate(self.available_actions):
                     print(f"  {i+1}. {action}")
             else:
-                # All survivors have completed their actions
+                # All survivors have completed their actions - wait for user to advance
                 print("All survivors have completed their actions")
                 self._survivor_turn_initialized = False
-                self.mark_phase_complete()
+                self.waiting_for_action = False
+                self.waiting_for_phase_advance = True
+                self.phase_advance_message = "Press 'space' for zombie's turn"
+                print(self.phase_advance_message)
         else:
             # Fallback to old behavior
             active_survivor = None

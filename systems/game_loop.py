@@ -86,12 +86,21 @@ class GameStateSystem(GameSystem):
                 'target_survivors': getattr(self.turn_manager, 'available_target_survivors', [])
             }
         
+        # Check if we're waiting for phase advance
+        phase_advance_info = None
+        if self.turn_manager.is_waiting_for_phase_advance():
+            phase_advance_info = {
+                'waiting_for_advance': True,
+                'message': self.turn_manager.get_phase_advance_message()
+            }
+        
         return {
             "turn_info": self.turn_manager.get_turn_info(),
             "current_survivor": self.turn_manager.get_current_survivor(),
             "available_actions": (self.turn_manager.get_available_actions() 
                                 if self.turn_manager.is_waiting_for_action() else None),
-            "combat_info": combat_info
+            "combat_info": combat_info,
+            "phase_advance_info": phase_advance_info
         }
 
 
@@ -109,7 +118,11 @@ class GameActionProcessor:
             action_type = action.get("action")
             
             if action_type == "advance_phase":
-                if not self.turn_manager.is_waiting_for_action():
+                # Check if we're waiting for phase advance (e.g., between survivor and zombie turns)
+                if self.turn_manager.is_waiting_for_phase_advance():
+                    success = self.turn_manager.advance_to_next_phase()
+                    state_changes["phase_advanced"] = success
+                elif not self.turn_manager.is_waiting_for_action():
                     self.turn_manager.advance_phase()
                     state_changes["phase_advanced"] = True
             
@@ -189,6 +202,7 @@ class GameWorld:
         self.current_survivor = None
         self.available_actions = None
         self.show_action_menu = False
+        self.phase_advance_info = None
     
     def update_from_changes(self, changes: Dict[str, Any]):
         """Update world state from system changes."""
@@ -209,7 +223,8 @@ class GameWorld:
             "turn_info": self.turn_info,
             "current_survivor": self.current_survivor,
             "available_actions": self.available_actions,
-            "show_action_menu": self.available_actions is not None
+            "show_action_menu": self.available_actions is not None,
+            "phase_advance_info": self.phase_advance_info
         }
         
         return game_world, ui_state
@@ -320,7 +335,8 @@ class GameLoop:
         return {
             "turn_info": self.world.turn_info,
             "current_survivor": self.world.current_survivor,
-            "waiting_for_action": self.world.available_actions is not None
+            "waiting_for_action": self.world.available_actions is not None,
+            "waiting_for_phase_advance": self.world.phase_advance_info is not None
         }
     
     def stop(self):
