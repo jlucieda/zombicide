@@ -393,15 +393,23 @@ class UIRenderer(BaseRenderer):
         
         y_offset += 30
         
-        # Weapons in hands section - all on one line with brackets
+        # Weapons in hands section with characteristics
         equipment = survivor_data.get('equipment', {})
         right_hand = equipment.get('hand_right', 'empty').replace('_', ' ').title()
         left_hand = equipment.get('hand_left', 'empty').replace('_', ' ').title()
         
-        weapons_text = f"Weapons: [{left_hand}]    [{right_hand}]"
-        weapons_surface = self.config.get_font('medium').render(weapons_text, True, self.config.get_color('black'))
-        self.screen.blit(weapons_surface, (card_x + 10, card_y + y_offset))
-        y_offset += line_height + 10
+        # Display weapons label
+        weapons_label = "Weapons:"
+        weapons_label_surface = self.config.get_font('medium').render(weapons_label, True, self.config.get_color('black'))
+        self.screen.blit(weapons_label_surface, (card_x + 10, card_y + y_offset))
+        
+        # Calculate positions for centered weapon names and stats
+        weapons_start_x = card_x + 10 + weapons_label_surface.get_width() + 10
+        weapons_width = self.config.display.card_width - (weapons_start_x - card_x) - 20
+        
+        # Display weapon names and characteristics with proper alignment
+        self._render_aligned_weapons(weapons_start_x, card_y + y_offset, weapons_width, left_hand, right_hand, line_height)
+        y_offset += line_height * 2 + 5  # Space for weapon names and stats
         
         # Inventory section
         inv_title = self.config.get_font('medium').render("Inventory:", True, self.config.get_color('black'))
@@ -480,6 +488,53 @@ class UIRenderer(BaseRenderer):
             lines.append(current_line)
         
         return lines
+    
+    def _render_aligned_weapons(self, start_x: int, start_y: int, total_width: int, left_weapon: str, right_weapon: str, line_height: int):
+        """Render weapon names and stats with perfect alignment."""
+        from core.game_setup import GameSetup
+        
+        # Calculate two equal columns for left and right weapons
+        column_width = total_width // 2
+        left_column_x = start_x
+        right_column_x = start_x + column_width
+        
+        # Render left weapon (name and stats)
+        if left_weapon.lower() != "empty":
+            # Left weapon name
+            left_name = f"[{left_weapon}]"
+            left_name_surface = self.config.get_font('medium').render(left_name, True, self.config.get_color('black'))
+            left_name_x = left_column_x + (column_width - left_name_surface.get_width()) // 2  # Center in column
+            self.screen.blit(left_name_surface, (left_name_x, start_y))
+            
+            # Left weapon stats
+            weapon_data = GameSetup.get_weapon_stats(left_weapon)
+            if weapon_data:
+                left_stats = f"[{weapon_data['range']}/{weapon_data['dice']}/{weapon_data['target']}/{weapon_data['damage']}]"
+            else:
+                left_stats = "[No stats]"
+            
+            left_stats_surface = self.config.get_font('small').render(left_stats, True, self.config.get_color('gray'))
+            left_stats_x = left_column_x + (column_width - left_stats_surface.get_width()) // 2  # Center in column
+            self.screen.blit(left_stats_surface, (left_stats_x, start_y + line_height))
+        
+        # Render right weapon (name and stats)
+        if right_weapon.lower() != "empty":
+            # Right weapon name
+            right_name = f"[{right_weapon}]"
+            right_name_surface = self.config.get_font('medium').render(right_name, True, self.config.get_color('black'))
+            right_name_x = right_column_x + (column_width - right_name_surface.get_width()) // 2  # Center in column
+            self.screen.blit(right_name_surface, (right_name_x, start_y))
+            
+            # Right weapon stats
+            weapon_data = GameSetup.get_weapon_stats(right_weapon)
+            if weapon_data:
+                right_stats = f"[{weapon_data['range']}/{weapon_data['dice']}/{weapon_data['target']}/{weapon_data['damage']}]"
+            else:
+                right_stats = "[No stats]"
+            
+            right_stats_surface = self.config.get_font('small').render(right_stats, True, self.config.get_color('gray'))
+            right_stats_x = right_column_x + (column_width - right_stats_surface.get_width()) // 2  # Center in column
+            self.screen.blit(right_stats_surface, (right_stats_x, start_y + line_height))
 
     def render_action_menu(self, _current_survivor: Optional[Survivor], _available_actions: List[str]):
         """Action menu is now integrated into turn info window - this method does nothing."""

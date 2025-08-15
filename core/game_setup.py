@@ -16,6 +16,61 @@ class GameSetupError(Exception):
 class GameSetup:
     """Handles data loading and game state initialization."""
     
+    # Class variable to store weapons database
+    _weapons_db = None
+    
+    @staticmethod
+    def load_weapons_data(json_path: str = "weapons_db.json") -> Optional[Dict[str, Any]]:
+        """
+        Load weapons data from JSON file.
+        
+        Args:
+            json_path: Path to the weapons JSON file (default: weapons_db.json)
+            
+        Returns:
+            Dictionary containing weapons data, or None if loading fails
+            
+        Raises:
+            GameSetupError: If file cannot be loaded or parsed
+        """
+        try:
+            with open(json_path, 'r') as f:
+                weapons_data = json.load(f)
+            
+            if 'weapons' not in weapons_data:
+                raise GameSetupError(f"Invalid weapons file format: missing 'weapons' key in {json_path}")
+            
+            # Store in class variable for easy access
+            GameSetup._weapons_db = weapons_data
+            print(f"Loaded {len(weapons_data['weapons'])} weapons from database")
+            return weapons_data
+            
+        except FileNotFoundError:
+            raise GameSetupError(f"Weapons file not found: {json_path}")
+        except json.JSONDecodeError as e:
+            raise GameSetupError(f"Invalid JSON in weapons file {json_path}: {e}")
+        except Exception as e:
+            raise GameSetupError(f"Error loading weapons from {json_path}: {e}")
+    
+    @staticmethod
+    def get_weapon_stats(weapon_name: str) -> Optional[Dict[str, Any]]:
+        """
+        Get weapon statistics by name.
+        
+        Args:
+            weapon_name: Name of the weapon to look up
+            
+        Returns:
+            Dictionary with weapon stats, or None if not found
+        """
+        if not GameSetup._weapons_db:
+            return None
+        
+        for weapon in GameSetup._weapons_db['weapons']:
+            if weapon['name'].lower() == weapon_name.lower():
+                return weapon
+        return None
+    
     @staticmethod
     def load_map_data(json_path: str, map_index: int = 0) -> Optional[Dict[str, Any]]:
         """
@@ -131,7 +186,7 @@ class GameSetup:
     
     @staticmethod
     def setup_complete_game(maps_json_path: str, survivors_json_path: str, 
-                           map_index: int = 0) -> Tuple[Dict[str, Any], List[Dict[str, Any]], GameState]:
+                           map_index: int = 0, weapons_json_path: str = "weapons_db.json") -> Tuple[Dict[str, Any], List[Dict[str, Any]], GameState]:
         """
         Complete game setup: load all data and initialize game state.
         
@@ -147,6 +202,11 @@ class GameSetup:
             GameSetupError: If any part of setup fails
         """
         try:
+            # Load weapons data first (needed for weapon stats)
+            weapons_data = GameSetup.load_weapons_data(weapons_json_path)
+            if not weapons_data:
+                raise GameSetupError("Failed to load weapons data")
+            
             # Load map data
             map_data = GameSetup.load_map_data(maps_json_path, map_index)
             if not map_data:
