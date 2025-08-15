@@ -282,10 +282,10 @@ class UIRenderer(BaseRenderer):
         is_end_turn = 'End' in current_phase
         current_y = draw_phase_item('End Turn', is_end_turn, current_y)
         
-        # Add spacing before actions
+        # Add spacing before bottom section
         current_y += 10
         
-        # Show available actions for current survivor
+        # Show available actions for current survivor OR phase completion message
         if current_survivor and available_actions and is_survivor_turn:
             # Separator line
             pygame.draw.line(self.screen, self.config.get_color('white'), 
@@ -304,6 +304,24 @@ class UIRenderer(BaseRenderer):
                 action_surface = self.config.get_font('small').render(action_text, True, self.config.get_color('white'))
                 self.screen.blit(action_surface, (info_x + 15, current_y))
                 current_y += 16
+        
+        elif turn_info.get('phase_complete', False):
+            # Show phase completion message when phase is done
+            # Separator line
+            pygame.draw.line(self.screen, self.config.get_color('white'), 
+                           (info_x + 5, current_y), (info_x + info_width - 15, current_y), 1)
+            current_y += 15
+            
+            # Phase completion message
+            completion_text = "Press Space to move"
+            completion_surface = self.config.get_font('small').render(completion_text, True, self.config.get_color('yellow'))
+            self.screen.blit(completion_surface, (info_x + 10, current_y))
+            current_y += 16
+            
+            next_phase_text = "to next phase"
+            next_phase_surface = self.config.get_font('small').render(next_phase_text, True, self.config.get_color('yellow'))
+            self.screen.blit(next_phase_surface, (info_x + 10, current_y))
+            current_y += 16
     
 
     def render_survivor_cards(self, survivors_data: List[Dict[str, Any]], survivors: List[Survivor], 

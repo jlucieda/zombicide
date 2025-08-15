@@ -1,3 +1,4 @@
+
 import pygame
 from enum import Enum
 
@@ -216,7 +217,6 @@ class TurnManager:
                 # All survivors have completed their actions
                 if not self.phase_complete:
                     print("All survivors have completed their actions")
-                    print("Press SPACE or ENTER to advance to Zombie Turn")
                 self._survivor_turn_initialized = False
                 self.mark_phase_complete()
     
@@ -329,7 +329,6 @@ class TurnManager:
         if all_done:
             if not self.phase_complete:  # Only print once
                 print("All zombies have completed their actions")
-                print("Press SPACE or ENTER to advance to Zombie Spawn")
             self._zombie_turn_initialized = False
             self.mark_phase_complete()
     
@@ -339,7 +338,6 @@ class TurnManager:
             # Calculate spawn points based on turn number and game state
             spawn_count = min(self.turn_number, 4)  # Max 4 zombies per turn
             print(f"  Spawning {spawn_count} new zombies")
-            print("Press SPACE or ENTER to advance to Turn End")
             
             # In a full game, this would actually spawn zombies on the map
             self.mark_phase_complete()
@@ -348,7 +346,6 @@ class TurnManager:
         """Process the turn end phase."""
         if not self.phase_complete:
             print("  Turn cleanup and end-of-turn effects")
-            print("Press SPACE or ENTER to start next turn")
             # Handle any end-of-turn cleanup or effects
             self.mark_phase_complete()
     
