@@ -86,7 +86,20 @@ class TurnManager:
         self.phase_complete = False
         self.phase_timer = 0
         
+        # Reset survivor actions for new turn
+        if hasattr(self, '_current_game_state') and self._current_game_state:
+            for survivor in self._current_game_state.survivors:
+                if survivor.alive:
+                    survivor.actions_remaining = survivor.max_actions
+        
+        # Reset initialization flags
+        if hasattr(self, '_survivor_turn_initialized'):
+            self._survivor_turn_initialized = False
+        if hasattr(self, '_zombie_turn_initialized'):
+            self._zombie_turn_initialized = False
+        
         print(f"=== Starting Turn {self.turn_number} ===")
+        print("All survivors have 3 actions restored")
         
         # Trigger turn change callback
         if self.on_turn_change:
@@ -97,19 +110,17 @@ class TurnManager:
         if self.game_paused:
             return
             
-        # Update phase timer
+        # Update phase timer (but no automatic progression)
         self.phase_timer += dt
         
-        # Handle automatic phase progression for certain phases
-        if self.phase_complete and self.phase_timer >= self.auto_advance_delay:
-            self.advance_phase()
+        # All phase progression now requires user input (Space or Enter)
     
     def handle_event(self, event):
         """Handle input events for turn management."""
         if event.type == pygame.KEYDOWN:
-            if event.key == pygame.K_SPACE:
-                # Space bar advances to next phase (only if not waiting for survivor action)
-                if not self.waiting_for_action:
+            if event.key == pygame.K_SPACE or event.key == pygame.K_RETURN:
+                # Space or Enter advances to next phase (only if not waiting for survivor action)
+                if not self.waiting_for_action and self.phase_complete:
                     print(f"Manual phase advance: {self.get_phase_name()}")
                     self.advance_phase()
                     return True
@@ -205,6 +216,7 @@ class TurnManager:
                 # All survivors have completed their actions
                 if not self.phase_complete:
                     print("All survivors have completed their actions")
+                    print("Press SPACE or ENTER to advance to Zombie Turn")
                 self._survivor_turn_initialized = False
                 self.mark_phase_complete()
     
@@ -317,6 +329,7 @@ class TurnManager:
         if all_done:
             if not self.phase_complete:  # Only print once
                 print("All zombies have completed their actions")
+                print("Press SPACE or ENTER to advance to Zombie Spawn")
             self._zombie_turn_initialized = False
             self.mark_phase_complete()
     
@@ -326,6 +339,7 @@ class TurnManager:
             # Calculate spawn points based on turn number and game state
             spawn_count = min(self.turn_number, 4)  # Max 4 zombies per turn
             print(f"  Spawning {spawn_count} new zombies")
+            print("Press SPACE or ENTER to advance to Turn End")
             
             # In a full game, this would actually spawn zombies on the map
             self.mark_phase_complete()
@@ -334,6 +348,7 @@ class TurnManager:
         """Process the turn end phase."""
         if not self.phase_complete:
             print("  Turn cleanup and end-of-turn effects")
+            print("Press SPACE or ENTER to start next turn")
             # Handle any end-of-turn cleanup or effects
             self.mark_phase_complete()
     
