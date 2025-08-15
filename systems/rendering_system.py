@@ -261,14 +261,35 @@ class UIRenderer(BaseRenderer):
         
         # List all survivors under Survivor Turn with action counts
         if survivors:
-            for survivor in survivors:
-                if survivor.alive:
-                    # Format: "Eva (3/3)" showing current/max actions
-                    survivor_text = f"{survivor.name} ({survivor.actions_remaining}/3)"
-                    is_current_survivor = (current_survivor and 
-                                         current_survivor.name == survivor.name and 
-                                         is_survivor_turn)
-                    current_y = draw_phase_item(survivor_text, is_current_survivor, current_y, indent=15)
+            # Check if we have turn order information
+            turn_order_info = turn_info.get('turn_order_info')
+            if turn_order_info and 'turn_order' in turn_order_info:
+                # Display survivors in turn order with position indicators
+                turn_order_names = turn_order_info['turn_order']
+                for i, survivor_name in enumerate(turn_order_names):
+                    # Find the survivor entity
+                    survivor = next((s for s in survivors if s.name == survivor_name and s.alive), None)
+                    if survivor:
+                        # Format: "1. Eva (3/3)" showing position, name, and actions
+                        position_marker = f"{i+1}. " if turn_order_info.get('first_player') == survivor_name else f"{i+1}. "
+                        if turn_order_info.get('first_player') == survivor_name:
+                            position_marker = f"👑{i+1}. "  # Crown for first player
+                        
+                        survivor_text = f"{position_marker}{survivor.name} ({survivor.actions_remaining}/3)"
+                        is_current_survivor = (current_survivor and 
+                                             current_survivor.name == survivor.name and 
+                                             is_survivor_turn)
+                        current_y = draw_phase_item(survivor_text, is_current_survivor, current_y, indent=15)
+            else:
+                # Fallback to original display
+                for survivor in survivors:
+                    if survivor.alive:
+                        # Format: "Eva (3/3)" showing current/max actions
+                        survivor_text = f"{survivor.name} ({survivor.actions_remaining}/3)"
+                        is_current_survivor = (current_survivor and 
+                                             current_survivor.name == survivor.name and 
+                                             is_survivor_turn)
+                        current_y = draw_phase_item(survivor_text, is_current_survivor, current_y, indent=15)
         
         # b) Zombie Turn
         is_zombie_turn = 'Zombie' in current_phase and 'Spawn' not in current_phase

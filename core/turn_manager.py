@@ -1,6 +1,7 @@
 
 import pygame
 from enum import Enum
+from .turn_order import TurnOrderManager
 
 class TurnPhase(Enum):
     SURVIVOR_TURN = 1
@@ -37,13 +38,23 @@ class TurnManager:
         self.available_target_survivors = []
         self.combat_message = ""
         
+        # New turn order management
+        self.turn_order_manager: TurnOrderManager = None
+        
     def get_current_phase(self):
         """Get the current turn phase."""
         return self.current_phase
     
     def get_turn_number(self):
         """Get the current turn number."""
-        return self.turn_number
+        return self.turn_order_manager.turn_number if self.turn_order_manager else self.turn_number
+    
+    def initialize_turn_order(self, survivors):
+        """Initialize the turn order manager with survivors."""
+        self.turn_order_manager = TurnOrderManager(survivors)
+        print(f"Turn order initialized for {len(survivors)} survivors")
+        turn_info = self.turn_order_manager.get_turn_info()
+        print(f"First player: {turn_info['first_player']}")
     
     def get_phase_name(self):
         """Get the human-readable name of the current phase."""
@@ -86,7 +97,14 @@ class TurnManager:
     
     def end_turn(self):
         """Complete the current turn and start a new one."""
-        self.turn_number += 1
+        # Use turn order manager if available
+        if self.turn_order_manager:
+            self.turn_order_manager.advance_turn()
+            self.turn_number = self.turn_order_manager.turn_number
+        else:
+            # Fallback to old behavior
+            self.turn_number += 1
+        
         self.current_phase = TurnPhase.SURVIVOR_TURN
         self.current_survivor_index = 0
         self.survivors_acted.clear()
@@ -105,8 +123,9 @@ class TurnManager:
         if hasattr(self, '_zombie_turn_initialized'):
             self._zombie_turn_initialized = False
         
-        print(f"=== Starting Turn {self.turn_number} ===")
-        print("All survivors have 3 actions restored")
+        if not self.turn_order_manager:
+            print(f"=== Starting Turn {self.turn_number} ===")
+            print("All survivors have 3 actions restored")
         
         # Trigger turn change callback
         if self.on_turn_change:
@@ -169,7 +188,12 @@ class TurnManager:
             self.waiting_for_action = False
             # Move to next survivor or complete phase if this survivor is done
             if not self.current_survivor.can_act():
-                self.current_survivor_index += 1
+                if self.turn_order_manager:
+                    # Advance to next survivor in turn order
+                    self.turn_order_manager.get_next_survivor()
+                else:
+                    # Fallback to old behavior
+                    self.current_survivor_index += 1
                 # Immediately find next survivor
                 self._find_next_survivor()
         
@@ -201,8 +225,19 @@ class TurnManager:
         if not hasattr(self, '_survivor_turn_initialized'):
             game_state.start_entity_turns(type(game_state.survivors[0]))
             self._survivor_turn_initialized = True
+            
+            # Initialize turn order manager if not already done
+            if not self.turn_order_manager:
+                self.initialize_turn_order(game_state.survivors)
+            
             self.current_survivor_index = 0
             print("=== Survivor Turn Started (Manual Control) ===")
+            
+            # Show turn order information
+            if self.turn_order_manager:
+                turn_info = self.turn_order_manager.get_turn_info()
+                print(f"Turn order: {' → '.join(turn_info['turn_order'])}")
+            
             for survivor in game_state.survivors:
                 if survivor.alive:
                     print(f"  {survivor.name}: {survivor.actions_remaining} actions remaining")
@@ -312,31 +347,58 @@ class TurnManager:
         
         game_state = self._current_game_state
         
-        # Find next active survivor
-        active_survivor = None
-        while self.current_survivor_index < len(game_state.survivors):
-            survivor = game_state.survivors[self.current_survivor_index]
-            if survivor.alive and survivor.can_act():
-                active_survivor = survivor
-                break
+        # Use turn order manager if available
+        if self.turn_order_manager:
+            active_survivor = self.turn_order_manager.get_current_survivor()
+            
+            # If current survivor can't act, find next one
+            while active_survivor and not active_survivor.can_act():
+                active_survivor = self.turn_order_manager.get_next_survivor()
+            
+            if active_survivor:
+                self.current_survivor = active_survivor
+                # Generate available actions
+                self.available_actions = self._get_available_actions(active_survivor, game_state)
+                self.waiting_for_action = True
+                
+                turn_info = self.turn_order_manager.get_turn_info()
+                position = self.turn_order_manager.get_position_in_turn(active_survivor) + 1
+                print(f"\n=== {active_survivor.name}'s Turn ({position}/{len(turn_info['turn_order'])}) ===")
+                print(f"Actions remaining: {active_survivor.actions_remaining}")
+                print("Available actions:")
+                for i, action in enumerate(self.available_actions):
+                    print(f"  {i+1}. {action}")
             else:
-                self.current_survivor_index += 1
-        
-        if active_survivor:
-            self.current_survivor = active_survivor
-            # Generate available actions
-            self.available_actions = self._get_available_actions(active_survivor, game_state)
-            self.waiting_for_action = True
-            print(f"\n=== {active_survivor.name}'s Turn ===")
-            print(f"Actions remaining: {active_survivor.actions_remaining}")
-            print("Available actions:")
-            for i, action in enumerate(self.available_actions):
-                print(f"  {i+1}. {action}")
+                # All survivors have completed their actions
+                print("All survivors have completed their actions")
+                self._survivor_turn_initialized = False
+                self.mark_phase_complete()
         else:
-            # All survivors have completed their actions
-            print("All survivors have completed their actions")
-            self._survivor_turn_initialized = False
-            self.mark_phase_complete()
+            # Fallback to old behavior
+            active_survivor = None
+            while self.current_survivor_index < len(game_state.survivors):
+                survivor = game_state.survivors[self.current_survivor_index]
+                if survivor.alive and survivor.can_act():
+                    active_survivor = survivor
+                    break
+                else:
+                    self.current_survivor_index += 1
+            
+            if active_survivor:
+                self.current_survivor = active_survivor
+                # Generate available actions
+                self.available_actions = self._get_available_actions(active_survivor, game_state)
+                self.waiting_for_action = True
+                print(f"\n=== {active_survivor.name}'s Turn ===")
+                print(f"Actions remaining: {active_survivor.actions_remaining}")
+                print("Available actions:")
+                for i, action in enumerate(self.available_actions):
+                    print(f"  {i+1}. {action}")
+            else:
+                # All survivors have completed their actions
+                print("All survivors have completed their actions")
+                self._survivor_turn_initialized = False
+                self.mark_phase_complete()
     
     def _inflict_wound(self, survivor, zombie, game_state):
         """Inflict a wound on a survivor."""
@@ -445,7 +507,7 @@ class TurnManager:
     
     def get_turn_info(self):
         """Get comprehensive turn information for display."""
-        return {
+        base_info = {
             'turn_number': self.turn_number,
             'phase': self.current_phase,
             'phase_name': self.get_phase_name(),
@@ -453,6 +515,12 @@ class TurnManager:
             'survivors_acted': len(self.survivors_acted),
             'paused': self.game_paused
         }
+        
+        # Add turn order information if available
+        if self.turn_order_manager:
+            base_info['turn_order_info'] = self.turn_order_manager.get_turn_info()
+        
+        return base_info
     
     def reset(self):
         """Reset the turn manager to initial state."""
