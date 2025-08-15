@@ -31,6 +31,12 @@ class TurnManager:
         self.waiting_for_action = False
         self.available_actions = []
         
+        # Combat system
+        self.waiting_for_survivor_selection = False
+        self.attacking_zombie = None
+        self.available_target_survivors = []
+        self.combat_message = ""
+        
     def get_current_phase(self):
         """Get the current turn phase."""
         return self.current_phase
@@ -120,8 +126,8 @@ class TurnManager:
         """Handle input events for turn management."""
         if event.type == pygame.KEYDOWN:
             if event.key == pygame.K_SPACE or event.key == pygame.K_RETURN:
-                # Space or Enter advances to next phase (only if not waiting for survivor action)
-                if not self.waiting_for_action and self.phase_complete:
+                # Space or Enter advances to next phase (only if not waiting for survivor action or selection)
+                if not self.waiting_for_action and not self.waiting_for_survivor_selection and self.phase_complete:
                     print(f"Manual phase advance: {self.get_phase_name()}")
                     self.advance_phase()
                     return True
@@ -138,6 +144,14 @@ class TurnManager:
                     return self.select_action(1)  # Attack
                 elif event.key == pygame.K_3:
                     return self.select_action(2)  # Skip turn
+            elif self.waiting_for_survivor_selection and self.current_phase == TurnPhase.ZOMBIE_TURN:
+                # Handle survivor target selection for zombie combat
+                if event.key == pygame.K_1 and len(self.available_target_survivors) >= 1:
+                    return self.select_survivor_target(0)
+                elif event.key == pygame.K_2 and len(self.available_target_survivors) >= 2:
+                    return self.select_survivor_target(1)
+                elif event.key == pygame.K_3 and len(self.available_target_survivors) >= 3:
+                    return self.select_survivor_target(2)
         return False
     
     def select_action(self, action_index):
@@ -156,6 +170,8 @@ class TurnManager:
             # Move to next survivor or complete phase if this survivor is done
             if not self.current_survivor.can_act():
                 self.current_survivor_index += 1
+                # Immediately find next survivor
+                self._find_next_survivor()
         
         return success
     
@@ -193,32 +209,7 @@ class TurnManager:
         
         # If not waiting for action, find next survivor who can act
         if not self.waiting_for_action:
-            # Find next active survivor
-            active_survivor = None
-            while self.current_survivor_index < len(game_state.survivors):
-                survivor = game_state.survivors[self.current_survivor_index]
-                if survivor.alive and survivor.can_act():
-                    active_survivor = survivor
-                    break
-                else:
-                    self.current_survivor_index += 1
-            
-            if active_survivor:
-                self.current_survivor = active_survivor
-                # Generate available actions
-                self.available_actions = self._get_available_actions(active_survivor, game_state)
-                self.waiting_for_action = True
-                print(f"\n=== {active_survivor.name}'s Turn ===")
-                print(f"Actions remaining: {active_survivor.actions_remaining}")
-                print("Available actions:")
-                for i, action in enumerate(self.available_actions):
-                    print(f"  {i+1}. {action}")
-            else:
-                # All survivors have completed their actions
-                if not self.phase_complete:
-                    print("All survivors have completed their actions")
-                self._survivor_turn_initialized = False
-                self.mark_phase_complete()
+            self._find_next_survivor()
     
     def _get_available_actions(self, survivor, game_state):
         """Get available actions for a survivor."""
@@ -296,41 +287,139 @@ class TurnManager:
         
         return False
     
+    def select_survivor_target(self, target_index):
+        """Select a survivor target for zombie combat."""
+        if not self.waiting_for_survivor_selection or target_index >= len(self.available_target_survivors):
+            return False
+        
+        target_survivor = self.available_target_survivors[target_index]
+        self._inflict_wound(target_survivor, self.attacking_zombie, self._current_game_state)
+        
+        # Reset combat state
+        self.attacking_zombie.consume_action()
+        self._zombie_index += 1
+        self.waiting_for_survivor_selection = False
+        self.attacking_zombie = None
+        self.available_target_survivors = []
+        self.combat_message = ""
+        
+        return True
+    
+    def _find_next_survivor(self):
+        """Find the next survivor who can act."""
+        if not hasattr(self, '_current_game_state') or not self._current_game_state:
+            return
+        
+        game_state = self._current_game_state
+        
+        # Find next active survivor
+        active_survivor = None
+        while self.current_survivor_index < len(game_state.survivors):
+            survivor = game_state.survivors[self.current_survivor_index]
+            if survivor.alive and survivor.can_act():
+                active_survivor = survivor
+                break
+            else:
+                self.current_survivor_index += 1
+        
+        if active_survivor:
+            self.current_survivor = active_survivor
+            # Generate available actions
+            self.available_actions = self._get_available_actions(active_survivor, game_state)
+            self.waiting_for_action = True
+            print(f"\n=== {active_survivor.name}'s Turn ===")
+            print(f"Actions remaining: {active_survivor.actions_remaining}")
+            print("Available actions:")
+            for i, action in enumerate(self.available_actions):
+                print(f"  {i+1}. {action}")
+        else:
+            # All survivors have completed their actions
+            print("All survivors have completed their actions")
+            self._survivor_turn_initialized = False
+            self.mark_phase_complete()
+    
+    def _inflict_wound(self, survivor, zombie, game_state):
+        """Inflict a wound on a survivor."""
+        old_wounds = survivor.wounds
+        died = survivor.take_damage()
+        
+        message = f"{zombie.name} attacks {survivor.name} - {survivor.name} takes 1 wound ({old_wounds + 1}/2)"
+        if died:
+            message += f" and dies!"
+            print(f"    {message}")
+            # Update survivor data to reflect death
+            if hasattr(survivor, 'survivor_data'):
+                survivor.survivor_data['wounds'] = survivor.wounds
+        else:
+            print(f"    {message}")
+            # Update survivor data
+            if hasattr(survivor, 'survivor_data'):
+                survivor.survivor_data['wounds'] = survivor.wounds
+    
     def process_zombie_turn(self, game_state):
-        """Process the zombie turn phase."""
+        """Process the zombie turn phase with automatic combat."""
         if not hasattr(game_state, 'zombies') or len(game_state.zombies) == 0:
             self.mark_phase_complete()
             return
+        
+        # Store game state reference
+        self._current_game_state = game_state
         
         # Initialize zombie turns if not done yet
         if not hasattr(self, '_zombie_turn_initialized'):
             game_state.start_entity_turns(type(game_state.zombies[0]))
             self._zombie_turn_initialized = True
-            print("=== Zombie Turn Started ===")
-            
-        # Process zombie actions
-        all_done = True
-        for zombie in game_state.zombies:
-            if zombie.alive and zombie.can_act():
-                all_done = False
-                
-                # Let zombie decide and execute their action
-                action = zombie.decide_action(game_state)
-                if action:
-                    result = game_state.execute_action(action)
-                    print(f"    {result.message}")
-                    if not result.success:
-                        # If action failed, consume the action anyway
-                        zombie.consume_action()
-                else:
-                    # No valid action available, skip this zombie's remaining actions
-                    zombie.actions_remaining = 0
+            self._zombie_index = 0
+            print("=== Zombie Turn Started (Combat Phase) ===")
         
-        if all_done:
-            if not self.phase_complete:  # Only print once
-                print("All zombies have completed their actions")
-            self._zombie_turn_initialized = False
-            self.mark_phase_complete()
+        # If waiting for survivor selection, don't process other zombies
+        if self.waiting_for_survivor_selection:
+            return
+        
+        # Process zombies one by one
+        while self._zombie_index < len(game_state.zombies):
+            zombie = game_state.zombies[self._zombie_index]
+            
+            if zombie.alive and zombie.can_act():
+                # Check for survivors in same zone
+                survivors_in_zone = [s for s in game_state.survivors 
+                                   if s.position == zombie.position and s.alive]
+                
+                if survivors_in_zone:
+                    # Zombie automatically attacks - inflict wound
+                    if len(survivors_in_zone) == 1:
+                        # Only one survivor - direct attack
+                        target = survivors_in_zone[0]
+                        self._inflict_wound(target, zombie, game_state)
+                        zombie.consume_action()
+                        self._zombie_index += 1
+                    else:
+                        # Multiple survivors - player must choose target
+                        self.attacking_zombie = zombie
+                        self.available_target_survivors = survivors_in_zone
+                        self.waiting_for_survivor_selection = True
+                        self.combat_message = f"{zombie.name} attacks! Choose target survivor:"
+                        print(f"\n{self.combat_message}")
+                        for i, survivor in enumerate(survivors_in_zone):
+                            print(f"  {i+1}. {survivor.name} (Wounds: {survivor.wounds}/2)")
+                        return  # Wait for player input
+                else:
+                    # No survivors in zone - move toward closest survivor
+                    action = zombie.decide_action(game_state)
+                    if action:
+                        result = game_state.execute_action(action)
+                        print(f"    {result.message}")
+                    else:
+                        zombie.consume_action()
+                    self._zombie_index += 1
+            else:
+                self._zombie_index += 1
+        
+        # All zombies processed
+        if not self.phase_complete:
+            print("All zombies have completed their actions")
+        self._zombie_turn_initialized = False
+        self.mark_phase_complete()
     
     def process_zombie_spawn(self):
         """Process the zombie spawn phase."""

@@ -77,11 +77,21 @@ class GameStateSystem(GameSystem):
         elif current_phase == TurnPhase.TURN_END:
             self.turn_manager.process_turn_end()
         
+        # Build combat info if zombie combat is active
+        combat_info = None
+        if hasattr(self.turn_manager, 'waiting_for_survivor_selection') and self.turn_manager.waiting_for_survivor_selection:
+            combat_info = {
+                'waiting_for_selection': True,
+                'message': getattr(self.turn_manager, 'combat_message', 'Combat!'),
+                'target_survivors': getattr(self.turn_manager, 'available_target_survivors', [])
+            }
+        
         return {
             "turn_info": self.turn_manager.get_turn_info(),
             "current_survivor": self.turn_manager.get_current_survivor(),
             "available_actions": (self.turn_manager.get_available_actions() 
-                                if self.turn_manager.is_waiting_for_action() else None)
+                                if self.turn_manager.is_waiting_for_action() else None),
+            "combat_info": combat_info
         }
 
 
@@ -115,6 +125,15 @@ class GameActionProcessor:
                         state_changes["action_selected"] = success
                         if not success:
                             state_changes["invalid_action"] = action_index
+            
+            elif action_type == "survivor_target_selection":
+                if hasattr(self.turn_manager, 'waiting_for_survivor_selection') and self.turn_manager.waiting_for_survivor_selection:
+                    target_index = action.get("target_index", -1)
+                    if target_index >= 0:
+                        success = self.turn_manager.select_survivor_target(target_index)
+                        state_changes["target_selected"] = success
+                        if not success:
+                            state_changes["invalid_target"] = target_index
             
             elif action_type == "toggle_debug":
                 # This would be handled by the configuration manager
@@ -186,6 +205,7 @@ class GameLoop:
     
     def set_game_components(self, turn_manager, game_state):
         """Set game-specific components after game data is loaded."""
+        self.turn_manager = turn_manager  # Store reference for event handling
         self.game_state_system = GameStateSystem(turn_manager, game_state)
         self.action_processor = GameActionProcessor(turn_manager)
         
@@ -220,6 +240,22 @@ class GameLoop:
     
     def handle_input(self):
         """Process input through the input system."""
+        # Get raw pygame events for turn manager before they're consumed
+        import pygame
+        raw_events = pygame.event.get()
+        
+        # Pass raw events to turn manager
+        if hasattr(self, 'turn_manager') and self.turn_manager:
+            for pygame_event in raw_events:
+                if pygame_event.type == pygame.QUIT:
+                    self.running = False
+                else:
+                    self.turn_manager.handle_event(pygame_event)
+        
+        # Put events back for input system processing
+        for event in raw_events:
+            pygame.event.post(event)
+        
         events = self.input_system.process_input()
         
         if self.input_system.is_quit_requested():

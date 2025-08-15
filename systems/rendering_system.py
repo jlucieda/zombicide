@@ -207,7 +207,7 @@ class EntityRenderer(BaseRenderer):
 class UIRenderer(BaseRenderer):
     """Handles UI elements rendering (menus, HUD, cards)."""
     
-    def render_turn_info(self, turn_info: Dict[str, Any], current_survivor=None, available_actions=None, survivors=None):
+    def render_turn_info(self, turn_info: Dict[str, Any], current_survivor=None, available_actions=None, survivors=None, combat_info=None):
         """Render revamped turn control window in upper right corner."""
         # Calculate dynamic height based on content (survivors + phases + controls)
         info_width = 220  # Narrower to avoid overlapping survivor cards
@@ -305,6 +305,30 @@ class UIRenderer(BaseRenderer):
                 self.screen.blit(action_surface, (info_x + 15, current_y))
                 current_y += 16
         
+        elif combat_info and combat_info.get('waiting_for_selection', False):
+            # Show combat survivor selection UI
+            # Separator line
+            pygame.draw.line(self.screen, self.config.get_color('white'), 
+                           (info_x + 5, current_y), (info_x + info_width - 15, current_y), 1)
+            current_y += 15
+            
+            # Combat message
+            combat_message = combat_info.get('message', 'Combat!')
+            combat_surface = self.config.get_font('small').render(combat_message, True, self.config.get_color('red'))
+            self.screen.blit(combat_surface, (info_x + 10, current_y))
+            current_y += 18
+            
+            # List target survivors
+            target_survivors = combat_info.get('target_survivors', [])
+            for i, survivor in enumerate(target_survivors):
+                survivor_text = f"{i+1}. {survivor.name} ({survivor.wounds}/2)"
+                survivor_color = self.config.get_color('white')
+                if survivor.wounds >= 1:
+                    survivor_color = self.config.get_color('yellow')  # Wounded survivors in yellow
+                survivor_surface = self.config.get_font('small').render(survivor_text, True, survivor_color)
+                self.screen.blit(survivor_surface, (info_x + 15, current_y))
+                current_y += 16
+        
         elif turn_info.get('phase_complete', False):
             # Show phase completion message when phase is done
             # Separator line
@@ -348,13 +372,24 @@ class UIRenderer(BaseRenderer):
     def _render_single_survivor_card(self, card_x: int, card_y: int, survivor_data: Dict[str, Any], 
                                    survivor_entity: Optional[Survivor], is_active: bool):
         """Render a single survivor card with all details."""
-        # Card background
-        border_color = self.config.get_color('cyan') if is_active else self.config.get_color('white')
-        border_width = 5 if is_active else 3
+        # Check if survivor is dead
+        is_dead = (survivor_entity and not survivor_entity.alive) or survivor_data.get('wounds', 0) >= 2
+        
+        # Card background - dark gray for dead survivors
+        if is_dead:
+            border_color = self.config.get_color('dark_gray')
+            border_width = 3
+            card_bg_color = (80, 80, 80)  # Dark gray background for dead survivors
+            text_color = (160, 160, 160)  # Lighter gray text for dead survivors
+        else:
+            border_color = self.config.get_color('cyan') if is_active else self.config.get_color('white')
+            border_width = 5 if is_active else 3
+            card_bg_color = (200, 200, 200)  # Normal background
+            text_color = self.config.get_color('cyan') if is_active else self.config.get_color('black')
         
         pygame.draw.rect(self.screen, border_color, 
                        (card_x, card_y, self.config.display.card_width, self.config.display.card_height), border_width)
-        pygame.draw.rect(self.screen, (200, 200, 200), 
+        pygame.draw.rect(self.screen, card_bg_color, 
                        (card_x+border_width, card_y+border_width, 
                         self.config.display.card_width-2*border_width, self.config.display.card_height-2*border_width))
         
@@ -362,7 +397,7 @@ class UIRenderer(BaseRenderer):
         line_height = 18
         
         # Name, level circle, XP, and wounds all on the same line
-        name_color = self.config.get_color('cyan') if is_active else self.config.get_color('black')
+        name_color = text_color
         name_surface = self.config.get_font('xlarge').render(survivor_data['name'], True, name_color)
         self.screen.blit(name_surface, (card_x + 10, card_y + y_offset))
         
@@ -378,18 +413,24 @@ class UIRenderer(BaseRenderer):
         
         # XP and Wounds on same line as name (right side)
         info_text = f"XP: {survivor_data['exp']} | Wounds: {survivor_data['wounds']}/2"
-        info_surface = self.config.get_font('medium').render(info_text, True, self.config.get_color('black'))
+        wound_color = self.config.get_color('red') if survivor_data['wounds'] >= 2 else text_color
+        info_surface = self.config.get_font('medium').render(info_text, True, wound_color)
         info_x = card_x + self.config.display.card_width - info_surface.get_width() - 10
         self.screen.blit(info_surface, (info_x, card_y + y_offset + 5))  # Slight vertical offset to align with name
         
         y_offset += 25
         
-        # Actions remaining (if available)
-        if survivor_entity:
+        # Actions remaining (if available) - don't show for dead survivors
+        if survivor_entity and not is_dead:
             actions_text = f"Actions: {survivor_entity.actions_remaining}/3"
-            actions_color = self.config.get_color('red') if survivor_entity.actions_remaining == 0 else self.config.get_color('black')
+            actions_color = self.config.get_color('red') if survivor_entity.actions_remaining == 0 else text_color
             actions_surface = self.config.get_font('medium').render(actions_text, True, actions_color)
             self.screen.blit(actions_surface, (card_x + 10, card_y + y_offset))
+        elif is_dead:
+            # Show "DEAD" message for dead survivors
+            dead_text = "DEAD - Cannot Act"
+            dead_surface = self.config.get_font('medium').render(dead_text, True, self.config.get_color('red'))
+            self.screen.blit(dead_surface, (card_x + 10, card_y + y_offset))
         
         y_offset += 30
         
@@ -400,7 +441,7 @@ class UIRenderer(BaseRenderer):
         
         # Display weapons label
         weapons_label = "Weapons:"
-        weapons_label_surface = self.config.get_font('medium').render(weapons_label, True, self.config.get_color('black'))
+        weapons_label_surface = self.config.get_font('medium').render(weapons_label, True, text_color)
         self.screen.blit(weapons_label_surface, (card_x + 10, card_y + y_offset))
         
         # Calculate positions for centered weapon names and stats
@@ -408,11 +449,11 @@ class UIRenderer(BaseRenderer):
         weapons_width = self.config.display.card_width - (weapons_start_x - card_x) - 20
         
         # Display weapon names and characteristics with proper alignment
-        self._render_aligned_weapons(weapons_start_x, card_y + y_offset, weapons_width, left_hand, right_hand, line_height)
+        self._render_aligned_weapons(weapons_start_x, card_y + y_offset, weapons_width, left_hand, right_hand, line_height, text_color, is_dead)
         y_offset += line_height * 2 + 5  # Space for weapon names and stats
         
         # Inventory section
-        inv_title = self.config.get_font('medium').render("Inventory:", True, self.config.get_color('black'))
+        inv_title = self.config.get_font('medium').render("Inventory:", True, text_color)
         self.screen.blit(inv_title, (card_x + 10, card_y + y_offset))
         y_offset += line_height + 5
         
@@ -425,18 +466,18 @@ class UIRenderer(BaseRenderer):
         
         if inventory_items:
             for item in inventory_items:
-                item_surface = self.config.get_font('small').render(f"• {item}", True, self.config.get_color('black'))
+                item_surface = self.config.get_font('small').render(f"• {item}", True, text_color)
                 self.screen.blit(item_surface, (card_x + 15, card_y + y_offset))
                 y_offset += line_height
         else:
-            empty_surface = self.config.get_font('small').render("• Empty", True, self.config.get_color('gray'))
+            empty_surface = self.config.get_font('small').render("• Empty", True, text_color)
             self.screen.blit(empty_surface, (card_x + 15, card_y + y_offset))
             y_offset += line_height
         
         y_offset += 15
         
         # Skills section
-        skills_title = self.config.get_font('medium').render("Skills:", True, self.config.get_color('black'))
+        skills_title = self.config.get_font('medium').render("Skills:", True, text_color)
         self.screen.blit(skills_title, (card_x + 10, card_y + y_offset))
         y_offset += line_height + 5
         
@@ -461,7 +502,7 @@ class UIRenderer(BaseRenderer):
             for line in skill_lines:
                 if y_offset + line_height > card_y + self.config.display.card_height - 10:
                     break  # Don't draw outside card bounds
-                skill_surface = self.config.get_font('small').render(f"• {line}", True, self.config.get_color('black'))
+                skill_surface = self.config.get_font('small').render(f"• {line}", True, text_color)
                 self.screen.blit(skill_surface, (card_x + 15, card_y + y_offset))
                 y_offset += line_height
     
@@ -489,9 +530,13 @@ class UIRenderer(BaseRenderer):
         
         return lines
     
-    def _render_aligned_weapons(self, start_x: int, start_y: int, total_width: int, left_weapon: str, right_weapon: str, line_height: int):
+    def _render_aligned_weapons(self, start_x: int, start_y: int, total_width: int, left_weapon: str, right_weapon: str, line_height: int, text_color=None, is_dead=False):
         """Render weapon names and stats with perfect alignment."""
         from core.game_setup import GameSetup
+        
+        # Use default colors if not provided
+        if text_color is None:
+            text_color = self.config.get_color('black')
         
         # Calculate two equal columns for left and right weapons
         column_width = total_width // 2
@@ -502,7 +547,7 @@ class UIRenderer(BaseRenderer):
         if left_weapon.lower() != "empty":
             # Left weapon name
             left_name = f"[{left_weapon}]"
-            left_name_surface = self.config.get_font('medium').render(left_name, True, self.config.get_color('black'))
+            left_name_surface = self.config.get_font('medium').render(left_name, True, text_color)
             left_name_x = left_column_x + (column_width - left_name_surface.get_width()) // 2  # Center in column
             self.screen.blit(left_name_surface, (left_name_x, start_y))
             
@@ -513,7 +558,7 @@ class UIRenderer(BaseRenderer):
             else:
                 left_stats = "[No stats]"
             
-            left_stats_surface = self.config.get_font('small').render(left_stats, True, self.config.get_color('gray'))
+            left_stats_surface = self.config.get_font('small').render(left_stats, True, text_color)
             left_stats_x = left_column_x + (column_width - left_stats_surface.get_width()) // 2  # Center in column
             self.screen.blit(left_stats_surface, (left_stats_x, start_y + line_height))
         
@@ -521,7 +566,7 @@ class UIRenderer(BaseRenderer):
         if right_weapon.lower() != "empty":
             # Right weapon name
             right_name = f"[{right_weapon}]"
-            right_name_surface = self.config.get_font('medium').render(right_name, True, self.config.get_color('black'))
+            right_name_surface = self.config.get_font('medium').render(right_name, True, text_color)
             right_name_x = right_column_x + (column_width - right_name_surface.get_width()) // 2  # Center in column
             self.screen.blit(right_name_surface, (right_name_x, start_y))
             
@@ -532,7 +577,7 @@ class UIRenderer(BaseRenderer):
             else:
                 right_stats = "[No stats]"
             
-            right_stats_surface = self.config.get_font('small').render(right_stats, True, self.config.get_color('gray'))
+            right_stats_surface = self.config.get_font('small').render(right_stats, True, text_color)
             right_stats_x = right_column_x + (column_width - right_stats_surface.get_width()) // 2  # Center in column
             self.screen.blit(right_stats_surface, (right_stats_x, start_y + line_height))
 
@@ -578,7 +623,8 @@ class RenderingSystem:
                 ui_state['turn_info'],
                 ui_state.get('current_survivor'),
                 ui_state.get('available_actions') if ui_state.get('show_action_menu') else None,
-                game_world.get('survivors', [])  # Pass survivor list
+                game_world.get('survivors', []),  # Pass survivor list
+                ui_state.get('combat_info')  # Pass combat info
             )
         
         if 'survivors_data' in game_world and 'survivors' in game_world:
