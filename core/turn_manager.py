@@ -561,8 +561,8 @@ class TurnManager:
             if zombie.alive and zombie.can_act():
                 print(f"  Processing {zombie.name} (ID: {zombie.id}) at position ({zombie.position.row}, {zombie.position.col}) - Actions: {zombie.actions_remaining}/{zombie.max_actions}")
                 
-                # Ensure zombie only acts once per turn
-                if zombie.actions_remaining != zombie.max_actions:
+                # Ensure zombie has actions remaining, otherwise move to next zombie
+                if zombie.actions_remaining == 0:
                     print(f"    {zombie.name} has already acted this turn, skipping")
                     self._zombie_index += 1
                     return
@@ -576,7 +576,7 @@ class TurnManager:
                         # Only one survivor - direct attack
                         target = survivors_in_zone[0]
                         self._inflict_wound(target, zombie, game_state)
-                        zombie.consume_action()
+                        zombie.actions_remaining -= 1
                         self._zombie_index += 1
                     else:
                         # Multiple survivors - player must choose target
@@ -595,7 +595,7 @@ class TurnManager:
                         result = game_state.execute_action(action)
                         print(f"    {result.message}")
                     else:
-                        zombie.consume_action()
+                        zombie.actions_remaining -= 1
                     self._zombie_index += 1
             else:
                 self._zombie_index += 1
@@ -609,9 +609,10 @@ class TurnManager:
     
     def process_zombie_spawn(self):
         """Process the zombie spawn phase."""
+        # Soon, loop for each spawn zone and spawn zombies
         if not self.phase_complete:
-            # Calculate spawn points based on turn number and game state
-            spawn_count = min(self.turn_number, 4)  # Max 4 zombies per turn
+            # For now, just spawn 1 zombie per turn
+            spawn_count = 1
             print(f"  Spawning {spawn_count} new zombies")
             
             # Spawn zombies at (2,2) spawn zone
@@ -654,13 +655,13 @@ class TurnManager:
         
         return base_info
     
-    def reset(self):
-        """Reset the turn manager to initial state."""
-        self.current_phase = TurnPhase.SURVIVOR_TURN
-        self.turn_number = 1
-        self.current_survivor_index = 0
-        self.survivors_acted.clear()
-        self.phase_complete = False
-        self.game_paused = False
-        self.phase_timer = 0
-        print("Turn manager reset to initial state")
+    # def reset(self):
+    #    """Reset the turn manager to initial state."""
+    #    self.current_phase = TurnPhase.SURVIVOR_TURN
+    #    self.turn_number = 1
+    #    self.current_survivor_index = 0
+    #    self.survivors_acted.clear()
+    #    self.phase_complete = False
+    #    self.game_paused = False
+    #    self.phase_timer = 0
+    #    print("Turn manager reset to initial state")
