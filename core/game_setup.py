@@ -173,18 +173,14 @@ class GameSetup:
     @staticmethod
     def initialize_game_state(survivor_data: List[Dict[str, Any]], 
                              zombie_types_data: Dict[str, Any],
-                             initial_survivor_position: Tuple[int, int] = (0, 2),
-                             initial_zombie_position: Tuple[int, int] = (2, 2),
-                             zombie_count: int = 2) -> GameState:
+                             initial_survivor_position: Tuple[int, int] = (0, 2)) -> GameState:
         """
-        Initialize the game state with survivors and zombies.
+        Initialize the game state with survivors only. Zombies will be spawned during gameplay.
         
         Args:
             survivor_data: List of survivor data from JSON
             zombie_types_data: Dictionary containing zombie types data
             initial_survivor_position: Starting position for survivors (row, col)
-            initial_zombie_position: Starting position for zombies (row, col)  
-            zombie_count: Number of zombies to create
             
         Returns:
             Initialized GameState object
@@ -206,14 +202,7 @@ class GameSetup:
                 game_state.add_survivor(survivor)
                 print(f"  Added survivor: {survivor.name} at position ({survivor_pos.row}, {survivor_pos.col})")
             
-            # Initialize zombies using the spawn method for unique IDs
-            zombie_pos = Position(initial_zombie_position[0], initial_zombie_position[1])
-            for i in range(zombie_count):
-                # For now, spawn walkers by default
-                zombie = game_state.spawn_zombie(zombie_pos, "walker")
-                print(f"  Added {zombie.name} (ID: {zombie.id}) - Type: {zombie.zombie_type} at position ({zombie_pos.row}, {zombie_pos.col})")
-            
-            print(f"Game state initialized with {len(game_state.survivors)} survivors and {len(game_state.zombies)} zombies")
+            print(f"Game state initialized with {len(game_state.survivors)} survivors. Zombies will spawn during gameplay.")
             return game_state
             
         except Exception as e:

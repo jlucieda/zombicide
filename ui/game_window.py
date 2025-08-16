@@ -80,13 +80,8 @@ class GameWindow:
                 survivor = Survivor(survivor_id, survivor_data['name'], position, survivor_data)
                 self.game_state.add_survivor(survivor)
             
-            # Initialize zombies in game state (2 zombies in zone (2,2) - bottom right)
+            # Initialize zombies list (zombies will spawn during gameplay)
             self.game_state.zombies.clear()
-            for i in range(2):
-                zombie_id = f"zombie_{i}"
-                position = Position(2, 2)  # Bottom right zone
-                zombie = Zombie(zombie_id, position)
-                self.game_state.add_zombie(zombie)
             
         except (FileNotFoundError, KeyError, json.JSONDecodeError) as e:
             print(f"Error loading survivor data: {e}")
