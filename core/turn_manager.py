@@ -126,6 +126,8 @@ class TurnManager:
             self._survivor_turn_initialized = False
         if hasattr(self, '_zombie_turn_initialized'):
             self._zombie_turn_initialized = False
+        if hasattr(self, '_zombie_index'):
+            self._zombie_index = 0
         
         if not self.turn_order_manager:
             print(f"=== Starting Turn {self.turn_number} ===")
@@ -541,21 +543,29 @@ class TurnManager:
         self._current_game_state = game_state
         
         # Initialize zombie turns if not done yet
-        if not hasattr(self, '_zombie_turn_initialized'):
+        if not hasattr(self, '_zombie_turn_initialized') or not self._zombie_turn_initialized:
             game_state.start_entity_turns(type(game_state.zombies[0]))
             self._zombie_turn_initialized = True
             self._zombie_index = 0
             print("=== Zombie Turn Started (Combat Phase) ===")
+            print(f"  Restoring actions for {len([z for z in game_state.zombies if z.alive])} alive zombies")
         
         # If waiting for survivor selection, don't process other zombies
         if self.waiting_for_survivor_selection:
             return
         
-        # Process zombies one by one
-        while self._zombie_index < len(game_state.zombies):
+        # Process zombies one by one (one per game loop iteration)
+        if self._zombie_index < len(game_state.zombies):
             zombie = game_state.zombies[self._zombie_index]
             
             if zombie.alive and zombie.can_act():
+                print(f"  Processing {zombie.name} (ID: {zombie.id}) at position ({zombie.position.row}, {zombie.position.col}) - Actions: {zombie.actions_remaining}/{zombie.max_actions}")
+                
+                # Ensure zombie only acts once per turn
+                if zombie.actions_remaining != zombie.max_actions:
+                    print(f"    {zombie.name} has already acted this turn, skipping")
+                    self._zombie_index += 1
+                    return
                 # Check for survivors in same zone
                 survivors_in_zone = [s for s in game_state.survivors 
                                    if s.position == zombie.position and s.alive]
@@ -591,10 +601,11 @@ class TurnManager:
                 self._zombie_index += 1
         
         # All zombies processed
-        if not self.phase_complete:
-            print("All zombies have completed their actions")
-        self._zombie_turn_initialized = False
-        self.mark_phase_complete()
+        if self._zombie_index >= len(game_state.zombies):
+            if not self.phase_complete:
+                print("All zombies have completed their actions")
+                self._zombie_turn_initialized = False
+                self.mark_phase_complete()
     
     def process_zombie_spawn(self):
         """Process the zombie spawn phase."""
@@ -603,7 +614,15 @@ class TurnManager:
             spawn_count = min(self.turn_number, 4)  # Max 4 zombies per turn
             print(f"  Spawning {spawn_count} new zombies")
             
-            # In a full game, this would actually spawn zombies on the map
+            # Spawn zombies at (2,2) spawn zone
+            if hasattr(self, '_current_game_state') and self._current_game_state:
+                from .actions import Position
+                spawn_pos = Position(2, 2)
+                
+                for i in range(spawn_count):
+                    zombie = self._current_game_state.spawn_zombie(spawn_pos)
+                    print(f"    Spawned {zombie.name} (ID: {zombie.id}) at ({spawn_pos.row}, {spawn_pos.col})")
+            
             self.mark_phase_complete()
     
     def process_turn_end(self):

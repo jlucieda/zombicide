@@ -89,11 +89,21 @@ class Survivor(Entity):
         return False  # Survived
 
 class Zombie(Entity):
-    """Zombie entity with 1 action per turn."""
+    """Zombie entity with configurable attributes based on type."""
     
-    def __init__(self, entity_id: str, position: Position):
+    def __init__(self, entity_id: str, position: Position, zombie_type: str, zombie_data: dict):
         super().__init__(entity_id, f"Zombie_{entity_id}", position)
-        self.max_actions = 1  # Zombies get 1 action per turn
+        
+        # Zombie type and attributes
+        self.zombie_type = zombie_type
+        self.max_actions = zombie_data["actions_per_turn"]
+        self.wounds_inflicted = zombie_data["wounds"]  # Damage this zombie deals
+        self.damage_required = zombie_data["damage_required"]  # Weapon damage needed to kill
+        self.experience_points = zombie_data["experience_points"]
+        self.size_multiplier = zombie_data["size_multiplier"]
+        
+        # Update the name to include type
+        self.name = f"{zombie_type.capitalize()}_{entity_id}"
         
     def decide_action(self, game_state: 'GameState') -> Optional[Action]:
         """AI decision making for zombie."""
@@ -155,6 +165,8 @@ class GameState:
         self.survivors: List[Survivor] = []
         self.zombies: List[Zombie] = []
         self.grid_size = 3
+        self._next_zombie_id = 0  # Counter for unique zombie IDs
+        self.zombie_types_data = {}  # Will be loaded from JSON
         
     def add_survivor(self, survivor: Survivor):
         """Add a survivor to the game state."""
@@ -163,6 +175,24 @@ class GameState:
     def add_zombie(self, zombie: Zombie):
         """Add a zombie to the game state."""
         self.zombies.append(zombie)
+    
+    def spawn_zombie(self, position: Position, zombie_type: str = "walker") -> Zombie:
+        """Spawn a new zombie with a unique ID at the specified position."""
+        zombie_id = f"zombie_{self._next_zombie_id}"
+        self._next_zombie_id += 1
+        
+        # Get zombie type data
+        if zombie_type not in self.zombie_types_data:
+            zombie_type = "walker"  # Default fallback
+        
+        zombie_data = self.zombie_types_data[zombie_type]
+        zombie = Zombie(zombie_id, position, zombie_type, zombie_data)
+        self.add_zombie(zombie)
+        return zombie
+    
+    def load_zombie_types(self, zombie_types_data: dict):
+        """Load zombie types data from configuration."""
+        self.zombie_types_data = {ztype["name"]: ztype for ztype in zombie_types_data["zombie_types"]}
     
     def get_entity_by_id(self, entity_id: str) -> Optional[Entity]:
         """Find an entity by ID."""

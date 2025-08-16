@@ -1,0 +1,40 @@
+{
+  "zombie_types": [
+    {
+      "name": "walker",
+      "actions_per_turn": 1,
+      "wounds": 1,
+      "damage_required": 1,
+      "experience_points": 1,
+      "description": "Basic zombie that moves slowly but steadily",
+      "size_multiplier": 1.0
+    },
+    {
+      "name": "fatty",
+      "actions_per_turn": 1,
+      "wounds": 1,
+      "damage_required": 2,
+      "experience_points": 1,
+      "description": "Tough zombie requiring weapons with damage 2+ to kill",
+      "size_multiplier": 1.2
+    },
+    {
+      "name": "runner",
+      "actions_per_turn": 2,
+      "wounds": 1,
+      "damage_required": 1,
+      "experience_points": 1,
+      "description": "Fast zombie that can act twice per turn",
+      "size_multiplier": 1.0
+    },
+    {
+      "name": "abomination",
+      "actions_per_turn": 1,
+      "wounds": 1,
+      "damage_required": 3,
+      "experience_points": 5,
+      "description": "Powerful boss zombie requiring damage 3+ weapons",
+      "size_multiplier": 1.5
+    }
+  ]
+}

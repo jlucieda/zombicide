@@ -188,33 +188,62 @@ class GameRenderer:
             zone_x = self.config.MAP_START_X + col * self.config.ZONE_PIXEL_SIZE
             zone_y = self.config.MAP_START_Y + row * self.config.ZONE_PIXEL_SIZE
             
-            # Position tokens within the zone
-            tokens_per_row = min(3, len(zombie_group))
-            spacing = 20
-            start_x = zone_x + spacing
-            start_y = zone_y + spacing
+            # Position tokens within the zone - overlapping in same row
+            base_x = zone_x + self.config.ZONE_PIXEL_SIZE // 2
+            base_y = zone_y + self.config.ZONE_PIXEL_SIZE // 2
+            
+            # Calculate overlap spacing - more zombies = more overlap
+            if len(zombie_group) == 1:
+                overlap_spacing = 0
+            else:
+                # Overlap by 3/4 of token diameter for visual stacking effect
+                overlap_spacing = self.config.TOKEN_DIAMETER // 4
+            
+            # Calculate starting X position to center the group
+            total_width = (len(zombie_group) - 1) * overlap_spacing
+            start_x = base_x - total_width // 2
             
             for i, zombie in enumerate(zombie_group):
-                # Calculate position for each token
-                token_row = i // tokens_per_row
-                token_col = i % tokens_per_row
-                
-                token_x = start_x + token_col * (self.config.TOKEN_DIAMETER + spacing) + self.config.token_radius
-                token_y = start_y + token_row * (self.config.TOKEN_DIAMETER + spacing) + self.config.token_radius
+                # All zombies in same row, overlapping horizontally
+                token_x = start_x + i * overlap_spacing
+                token_y = base_y
                 
                 # Make sure token stays within zone bounds
-                if token_x + self.config.token_radius > zone_x + self.config.ZONE_PIXEL_SIZE or \
-                   token_y + self.config.token_radius > zone_y + self.config.ZONE_PIXEL_SIZE:
+                if token_x - self.config.token_radius < zone_x or \
+                   token_x + self.config.token_radius > zone_x + self.config.ZONE_PIXEL_SIZE:
                     continue
                 
-                # Draw dark grey circle with black border
-                pygame.draw.circle(self.screen, self.config.DARK_GRAY, (token_x, token_y), self.config.token_radius)
-                pygame.draw.circle(self.screen, self.config.BLACK, (token_x, token_y), self.config.token_radius, self.config.TOKEN_BORDER_WIDTH)
+                # Calculate radius based on zombie size multiplier
+                base_radius = self.config.token_radius
+                zombie_radius = int(base_radius * zombie.size_multiplier)
                 
-                # Draw 'Z' in the middle
-                z_surface = self.config.font_medium.render('Z', True, self.config.WHITE)
-                z_rect = z_surface.get_rect(center=(token_x, token_y))
-                self.screen.blit(z_surface, z_rect)
+                # Draw dark grey circle with black border
+                pygame.draw.circle(self.screen, self.config.DARK_GRAY, (token_x, token_y), zombie_radius)
+                pygame.draw.circle(self.screen, self.config.BLACK, (token_x, token_y), zombie_radius, self.config.TOKEN_BORDER_WIDTH)
+                
+                # Draw zombie type indicator in the middle
+                if zombie.zombie_type == "walker":
+                    text = "W"
+                elif zombie.zombie_type == "fatty":
+                    text = "F"
+                elif zombie.zombie_type == "runner":
+                    text = "R"
+                elif zombie.zombie_type == "abomination":
+                    text = "A"
+                else:
+                    text = "Z"
+                
+                # Use appropriate font size based on zombie size
+                if zombie.size_multiplier >= 1.5:
+                    font = self.config.font_large
+                elif zombie.size_multiplier >= 1.2:
+                    font = self.config.font_medium
+                else:
+                    font = self.config.font_medium
+                    
+                text_surface = font.render(text, True, self.config.WHITE)
+                text_rect = text_surface.get_rect(center=(token_x, token_y))
+                self.screen.blit(text_surface, text_rect)
     
     def draw_turn_info(self, turn_info: Dict[str, Any]):
         """Draw turn information on the screen."""

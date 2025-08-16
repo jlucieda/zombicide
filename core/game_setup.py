@@ -20,6 +20,37 @@ class GameSetup:
     _weapons_db = None
     
     @staticmethod
+    def load_zombie_types_data(json_path: str = "zombie_types_db.json") -> Optional[Dict[str, Any]]:
+        """
+        Load zombie types data from JSON file.
+        
+        Args:
+            json_path: Path to the zombie types JSON file (default: zombie_types_db.json)
+            
+        Returns:
+            Dictionary containing zombie types data, or None if loading fails
+            
+        Raises:
+            GameSetupError: If file cannot be loaded or parsed
+        """
+        try:
+            with open(json_path, 'r') as f:
+                zombie_types_data = json.load(f)
+            
+            if 'zombie_types' not in zombie_types_data:
+                raise GameSetupError(f"Invalid zombie types file format: missing 'zombie_types' key in {json_path}")
+            
+            print(f"Loaded {len(zombie_types_data['zombie_types'])} zombie types from database")
+            return zombie_types_data
+            
+        except FileNotFoundError:
+            raise GameSetupError(f"Zombie types file not found: {json_path}")
+        except json.JSONDecodeError as e:
+            raise GameSetupError(f"Invalid JSON in zombie types file {json_path}: {e}")
+        except Exception as e:
+            raise GameSetupError(f"Error loading zombie types from {json_path}: {e}")
+    
+    @staticmethod
     def load_weapons_data(json_path: str = "weapons_db.json") -> Optional[Dict[str, Any]]:
         """
         Load weapons data from JSON file.
@@ -141,6 +172,7 @@ class GameSetup:
     
     @staticmethod
     def initialize_game_state(survivor_data: List[Dict[str, Any]], 
+                             zombie_types_data: Dict[str, Any],
                              initial_survivor_position: Tuple[int, int] = (0, 2),
                              initial_zombie_position: Tuple[int, int] = (2, 2),
                              zombie_count: int = 2) -> GameState:
@@ -149,6 +181,7 @@ class GameSetup:
         
         Args:
             survivor_data: List of survivor data from JSON
+            zombie_types_data: Dictionary containing zombie types data
             initial_survivor_position: Starting position for survivors (row, col)
             initial_zombie_position: Starting position for zombies (row, col)  
             zombie_count: Number of zombies to create
@@ -162,6 +195,9 @@ class GameSetup:
         try:
             game_state = GameState()
             
+            # Load zombie types data into game state
+            game_state.load_zombie_types(zombie_types_data)
+            
             # Initialize survivors
             survivor_pos = Position(initial_survivor_position[0], initial_survivor_position[1])
             for i, survivor_info in enumerate(survivor_data):
@@ -170,13 +206,12 @@ class GameSetup:
                 game_state.add_survivor(survivor)
                 print(f"  Added survivor: {survivor.name} at position ({survivor_pos.row}, {survivor_pos.col})")
             
-            # Initialize zombies
+            # Initialize zombies using the spawn method for unique IDs
             zombie_pos = Position(initial_zombie_position[0], initial_zombie_position[1])
             for i in range(zombie_count):
-                zombie_id = f"zombie_{i}"
-                zombie = Zombie(zombie_id, zombie_pos)
-                game_state.add_zombie(zombie)
-                print(f"  Added {zombie.name} at position ({zombie_pos.row}, {zombie_pos.col})")
+                # For now, spawn walkers by default
+                zombie = game_state.spawn_zombie(zombie_pos, "walker")
+                print(f"  Added {zombie.name} (ID: {zombie.id}) - Type: {zombie.zombie_type} at position ({zombie_pos.row}, {zombie_pos.col})")
             
             print(f"Game state initialized with {len(game_state.survivors)} survivors and {len(game_state.zombies)} zombies")
             return game_state
@@ -186,7 +221,8 @@ class GameSetup:
     
     @staticmethod
     def setup_complete_game(maps_json_path: str, survivors_json_path: str, 
-                           map_index: int = 0, weapons_json_path: str = "weapons_db.json") -> Tuple[Dict[str, Any], List[Dict[str, Any]], GameState]:
+                           map_index: int = 0, weapons_json_path: str = "weapons_db.json",
+                           zombie_types_json_path: str = "zombie_types_db.json") -> Tuple[Dict[str, Any], List[Dict[str, Any]], GameState]:
         """
         Complete game setup: load all data and initialize game state.
         
@@ -217,8 +253,13 @@ class GameSetup:
             if not survivor_data:
                 raise GameSetupError("Failed to load survivor data")
             
+            # Load zombie types data
+            zombie_types_data = GameSetup.load_zombie_types_data(zombie_types_json_path)
+            if not zombie_types_data:
+                raise GameSetupError("Failed to load zombie types data")
+            
             # Initialize game state
-            game_state = GameSetup.initialize_game_state(survivor_data)
+            game_state = GameSetup.initialize_game_state(survivor_data, zombie_types_data)
             
             print("=== Game Setup Complete ===")
             return map_data, survivor_data, game_state
